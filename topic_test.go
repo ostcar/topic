@@ -113,8 +113,8 @@ func TestGetPrunedID(t *testing.T) {
 	if !ok {
 		t.Errorf("Expected err to be a topic.ErrUnknownID, got: %v", err)
 	}
-	if topicErr.First != 3 {
-		t.Errorf("Expected the first id in the error to be 3, got: %d", topicErr.First)
+	if topicErr.FirstID != 3 {
+		t.Errorf("Expected the first id in the error to be 3, got: %d", topicErr.FirstID)
 	}
 	if topicErr.ID != 1 {
 		t.Errorf("Expected the id in the topic to be 1, got: %d", topicErr.ID)
