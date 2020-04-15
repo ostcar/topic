@@ -2,9 +2,9 @@ package topic
 
 import "strconv"
 
-// ErrUnknownID is returned by Get() when a topic id is requested, that is lower
+// UnknownIDError is returned by Get() when a topic id is requested, that is lower
 // then the lowest id in the topic.
-type ErrUnknownID struct {
+type UnknownIDError struct {
 	// FirstID is the lowest id in the topic.
 	FirstID uint64
 
@@ -12,6 +12,6 @@ type ErrUnknownID struct {
 	ID uint64
 }
 
-func (e ErrUnknownID) Error() string {
+func (e UnknownIDError) Error() string {
 	return "id " + strconv.FormatUint(e.ID, 10) + " is unknown in topic. Lowest id is " + strconv.FormatUint(e.FirstID, 10)
 }

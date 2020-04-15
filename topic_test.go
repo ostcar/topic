@@ -120,14 +120,13 @@ func TestPrune(t *testing.T) {
 			closed := make(chan struct{})
 			close(closed)
 			top := topic.New(topic.WithClosed(closed))
-
 			pruneTime := tt.f(top)
 
 			top.Prune(pruneTime)
 
 			_, got, err := top.Get(context.Background(), 0)
 			if err != nil {
-				t.Errorf("Did not expect an error, got: %v", err)
+				t.Errorf("Get() returned an unexpected error %v", err)
 			}
 			if !cmpSlice(got, tt.expect) {
 				t.Errorf("Got %v, want %v", got, tt.expect)
@@ -147,7 +146,7 @@ func TestErrUnknownID(t *testing.T) {
 	top.Prune(ti)
 
 	_, _, err := top.Get(context.Background(), 1)
-	topicErr, ok := err.(topic.ErrUnknownID)
+	topicErr, ok := err.(topic.UnknownIDError)
 	if !ok {
 		t.Errorf("Expected err to be a topic.ErrUnknownID, got: %v", err)
 	}
@@ -199,6 +198,7 @@ func TestLastID(t *testing.T) {
 }
 
 func TestGetBlocking(t *testing.T) {
+	// Tests, that Get() blocks until there is new data.
 	top := topic.New()
 
 	// Add a value after a short time.
@@ -231,6 +231,7 @@ func TestGetBlocking(t *testing.T) {
 }
 
 func TestBlockUntilClose(t *testing.T) {
+	// Tests, that Get() unblocks, when the topic is closed.
 	closed := make(chan struct{})
 	top := topic.New(topic.WithClosed(closed))
 
@@ -268,9 +269,10 @@ func TestBlockUntilClose(t *testing.T) {
 }
 
 func TestBlockUntilContexDone(t *testing.T) {
+	// Tests, that Get() unblocks, when the context is canceled
 	top := topic.New()
-	ctx, close := context.WithCancel(context.Background())
-	defer close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Send values as soon as Get() returnes.
 	received := make(chan []string)
@@ -290,7 +292,7 @@ func TestBlockUntilContexDone(t *testing.T) {
 		t.Errorf("Get() returned before the context was canceled.")
 	case <-timer.C:
 		// Cancel the context after some time.
-		close()
+		cancel()
 	}
 
 	// Get should return after context was canceled.
@@ -306,6 +308,7 @@ func TestBlockUntilContexDone(t *testing.T) {
 }
 
 func TestBlockOnHighestID(t *testing.T) {
+	// Test, that Get() blocks on a non empty topic when the highest id is requested.
 	top := topic.New()
 	top.Add("v1")
 	top.Add("v2")
@@ -341,6 +344,7 @@ func TestBlockOnHighestID(t *testing.T) {
 }
 
 func TestGetOnClosedTopic(t *testing.T) {
+	// Test, that a Get()-call on a already closed topic returnes immediately
 	closed := make(chan struct{})
 	top := topic.New(topic.WithClosed(closed))
 	top.Add("v1")

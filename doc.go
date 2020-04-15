@@ -96,12 +96,16 @@ The usual pattern to subscibe to a topic is:
     ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
     defer cancel()
 
-    for len(values) > 0 {
+    for {
         id, values, err = top.Get(ctx, id)
         if err != nil {
             // Handle error
         }
-        // process values
+        if len(values) == 0 {
+            // When no values are returned, the topic is closed or the context is canceled.
+            return
+        }
+        // Process values
     }
 
 The loop will process all values added to the topic for one minute. If the topic
@@ -122,24 +126,28 @@ top.LastID() will only data, that is added after the call.
 
 So a pattern to get only new data would be:
 
-    id := topic.LastID()
+    id := top.LastID()
     var values []string
     var err error
 
-    for len(values) > 0 {
+    for {
         id, values, err = top.Get(context.Background(), id)
         if err != nil {
             // Handle error
         }
-        // process values
+        if len(values) == 0 {
+            // When no values are returned, the topic is closed or the context is canceled.
+            return
+        }
+        // Process values
     }
 
 
 Prune old values
 
 For this pattern to work, the topic has to save all values that where ever
-added. To free some memory, old values can be deleted from time to time. This can
-be accomplished with the Prune() method:
+added. To free some memory, old values can be deleted from time to time. This
+can be accomplished with the Prune() method:
 
     top.Prune(10*time.Minute)
 
