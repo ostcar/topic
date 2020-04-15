@@ -9,16 +9,17 @@ import (
 )
 
 func benchmarkAddWithXReceivers(count int, b *testing.B) {
-	done := make(chan struct{}, 0)
-	top := topic.New(topic.WithClosed(done))
+	closed := make(chan struct{})
+	defer close(closed)
+	top := topic.New(topic.WithClosed(closed))
 	for i := 0; i < count; i++ {
-		// starts a receiver that listens to the topic until an empty list is returned (done is closed)
+		// Starts a receiver that listens to the topic until the topic is closed.
 		go func() {
-			var tid uint64
-			var v []string
+			var id uint64
+			var values []string
 			for {
-				tid, v, _ = top.Get(context.Background(), tid)
-				if len(v) == 0 {
+				id, values, _ = top.Get(context.Background(), id)
+				if len(values) == 0 {
 					return
 				}
 			}
@@ -30,7 +31,6 @@ func benchmarkAddWithXReceivers(count int, b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		top.Add("value")
 	}
-	close(done)
 }
 
 func BenchmarkAddWithXReceivers1(b *testing.B)     { benchmarkAddWithXReceivers(1, b) }
@@ -44,12 +44,10 @@ func benchmarkReadBigTopic(count int, b *testing.B) {
 	for i := 0; i < count; i++ {
 		top.Add("value" + strconv.Itoa(i))
 	}
-	ctx := context.Background()
-
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		top.Get(ctx, 0)
+		top.Get(context.Background(), 0)
 	}
 }
 
@@ -65,13 +63,13 @@ func benchmarkReadLastBigTopic(count int, b *testing.B) {
 	for i := 0; i < count; i++ {
 		top.Add("value" + strconv.Itoa(i))
 	}
-	tid := top.LastID()
+	id := top.LastID()
 	ctx := context.Background()
 
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		top.Get(ctx, tid-1)
+		top.Get(ctx, id-1)
 	}
 }
 

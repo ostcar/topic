@@ -122,7 +122,7 @@ func (t *Topic) Get(ctx context.Context, id uint64) (uint64, []string, error) {
 
 	n := t.index[id]
 	if n == nil {
-		return 0, nil, ErrUnknownID{ID: id, FirstID: t.head.id}
+		return 0, nil, UnknownIDError{ID: id, FirstID: t.head.id}
 	}
 	return t.tail.id, runNode(n.next), nil
 }
