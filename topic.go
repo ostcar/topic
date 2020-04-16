@@ -115,6 +115,15 @@ func (t *Topic) Receive(ctx context.Context, id uint64) (uint64, []string, error
 		case <-t.closed:
 		case <-ctx.Done():
 		}
+
+		// In very rare cases, new data could be added to the topic at the same
+		// time as the topic was closed. If that happens, it is pseudo random,
+		// which select-case the golang runtime chooses. To always return all
+		// data, we have to check for new data here.
+		if t.LastID() > id {
+			return t.Receive(ctx, id)
+		}
+
 		// The topic or the condext is closed. Return without data.
 		return id, nil, nil
 	}
