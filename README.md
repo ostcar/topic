@@ -16,14 +16,15 @@ process the messages.
 
 A topic can be created with: `top := topic.New()`.
 
-To publish one or more values, use: `top.Add("info1", "info2")`.
+To publish one or more values, use: `top.Publish("info1", "info2")`.
 
-To receive values for the first time use: `id, values, err := top.Get(ctx, 0)`. The first
-value is a numeric id, it is needed for for next call of `top.Get()`. The second argument
-is a list of all strings that where published in this topic.
+To receive values for the first time use: `id, values, err := top.Retrive(ctx,
+0)`. The first value is a numeric id, it is needed for for next call of
+`top.Retrive()`. The second argument is a list of all strings that where
+published by this topic.
 
-To receive newer values, use `id, values, err = top.Get(ctx, id)`. It returns all values that
-added after the given `id`.
+To receive newer values, use `id, values, err = top.Retrive(ctx, id)`. It
+returns all values that published after the given `id`.
 
 A topic is save for concurrent use.
 

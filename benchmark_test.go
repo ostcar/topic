@@ -8,7 +8,7 @@ import (
 	"github.com/ostcar/topic"
 )
 
-func benchmarkAddWithXReceivers(count int, b *testing.B) {
+func benchmarkPublishWithXReceivers(count int, b *testing.B) {
 	closed := make(chan struct{})
 	defer close(closed)
 	top := topic.New(topic.WithClosed(closed))
@@ -18,7 +18,7 @@ func benchmarkAddWithXReceivers(count int, b *testing.B) {
 			var id uint64
 			var values []string
 			for {
-				id, values, _ = top.Get(context.Background(), id)
+				id, values, _ = top.Receive(context.Background(), id)
 				if len(values) == 0 {
 					return
 				}
@@ -29,39 +29,39 @@ func benchmarkAddWithXReceivers(count int, b *testing.B) {
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		top.Add("value")
+		top.Publish("value")
 	}
 }
 
-func BenchmarkAddWithXReceivers1(b *testing.B)     { benchmarkAddWithXReceivers(1, b) }
-func BenchmarkAddWithXReceivers10(b *testing.B)    { benchmarkAddWithXReceivers(10, b) }
-func BenchmarkAddWithXReceivers100(b *testing.B)   { benchmarkAddWithXReceivers(100, b) }
-func BenchmarkAddWithXReceivers1000(b *testing.B)  { benchmarkAddWithXReceivers(1_000, b) }
-func BenchmarkAddWithXReceivers10000(b *testing.B) { benchmarkAddWithXReceivers(10_000, b) }
+func BenchmarkPublishWithXReceivers1(b *testing.B)     { benchmarkPublishWithXReceivers(1, b) }
+func BenchmarkPublishWithXReceivers10(b *testing.B)    { benchmarkPublishWithXReceivers(10, b) }
+func BenchmarkPublishWithXReceivers100(b *testing.B)   { benchmarkPublishWithXReceivers(100, b) }
+func BenchmarkPublishWithXReceivers1000(b *testing.B)  { benchmarkPublishWithXReceivers(1_000, b) }
+func BenchmarkPublishWithXReceivers10000(b *testing.B) { benchmarkPublishWithXReceivers(10_000, b) }
 
-func benchmarkReadBigTopic(count int, b *testing.B) {
+func benchmarkRetrieveBigTopic(count int, b *testing.B) {
 	top := topic.New()
 	for i := 0; i < count; i++ {
-		top.Add("value" + strconv.Itoa(i))
+		top.Publish("value" + strconv.Itoa(i))
 	}
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		top.Get(context.Background(), 0)
+		top.Receive(context.Background(), 0)
 	}
 }
 
-func BenchmarkReadBigTopic1(b *testing.B)      { benchmarkReadBigTopic(1, b) }
-func BenchmarkReadBigTopic10(b *testing.B)     { benchmarkReadBigTopic(10, b) }
-func BenchmarkReadBigTopic100(b *testing.B)    { benchmarkReadBigTopic(100, b) }
-func BenchmarkReadBigTopic1000(b *testing.B)   { benchmarkReadBigTopic(1_000, b) }
-func BenchmarkReadBigTopic10000(b *testing.B)  { benchmarkReadBigTopic(10_000, b) }
-func BenchmarkReadBigTopic100000(b *testing.B) { benchmarkReadBigTopic(100_000, b) }
+func BenchmarkRetrieveBigTopic1(b *testing.B)      { benchmarkRetrieveBigTopic(1, b) }
+func BenchmarkRetrieveBigTopic10(b *testing.B)     { benchmarkRetrieveBigTopic(10, b) }
+func BenchmarkRetrieveBigTopic100(b *testing.B)    { benchmarkRetrieveBigTopic(100, b) }
+func BenchmarkRetrieveBigTopic1000(b *testing.B)   { benchmarkRetrieveBigTopic(1_000, b) }
+func BenchmarkRetrieveBigTopic10000(b *testing.B)  { benchmarkRetrieveBigTopic(10_000, b) }
+func BenchmarkRetrieveBigTopic100000(b *testing.B) { benchmarkRetrieveBigTopic(100_000, b) }
 
-func benchmarkReadLastBigTopic(count int, b *testing.B) {
+func benchmarkRetrieveLastBigTopic(count int, b *testing.B) {
 	top := topic.New()
 	for i := 0; i < count; i++ {
-		top.Add("value" + strconv.Itoa(i))
+		top.Publish("value" + strconv.Itoa(i))
 	}
 	id := top.LastID()
 	ctx := context.Background()
@@ -69,13 +69,13 @@ func benchmarkReadLastBigTopic(count int, b *testing.B) {
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		top.Get(ctx, id-1)
+		top.Receive(ctx, id-1)
 	}
 }
 
-func BenchmarkReadLastBigTopic1(b *testing.B)      { benchmarkReadLastBigTopic(1, b) }
-func BenchmarkReadLastBigTopic10(b *testing.B)     { benchmarkReadLastBigTopic(10, b) }
-func BenchmarkReadLastBigTopic100(b *testing.B)    { benchmarkReadLastBigTopic(100, b) }
-func BenchmarkReadLastBigTopic1000(b *testing.B)   { benchmarkReadLastBigTopic(1_000, b) }
-func BenchmarkReadLastBigTopic10000(b *testing.B)  { benchmarkReadLastBigTopic(10_000, b) }
-func BenchmarkReadLastBigTopic100000(b *testing.B) { benchmarkReadLastBigTopic(100_000, b) }
+func BenchmarkRetrieveLastBigTopic1(b *testing.B)      { benchmarkRetrieveLastBigTopic(1, b) }
+func BenchmarkRetrieveLastBigTopic10(b *testing.B)     { benchmarkRetrieveLastBigTopic(10, b) }
+func BenchmarkRetrieveLastBigTopic100(b *testing.B)    { benchmarkRetrieveLastBigTopic(100, b) }
+func BenchmarkRetrieveLastBigTopic1000(b *testing.B)   { benchmarkRetrieveLastBigTopic(1_000, b) }
+func BenchmarkRetrieveLastBigTopic10000(b *testing.B)  { benchmarkRetrieveLastBigTopic(10_000, b) }
+func BenchmarkRetrieveLastBigTopic100000(b *testing.B) { benchmarkRetrieveLastBigTopic(100_000, b) }
