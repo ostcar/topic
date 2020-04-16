@@ -50,6 +50,10 @@ func New(options ...Option) *Topic {
 //
 // Add() inserts the values in constant time.
 func (t *Topic) Add(value ...string) uint64 {
+	if len(value) == 0 {
+		return t.LastID()
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
