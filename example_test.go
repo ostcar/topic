@@ -8,23 +8,29 @@ import (
 )
 
 func ExampleTopic() {
-	top := topic.New()
+	closed := make(chan struct{})
+	top := topic.New(topic.WithClosed(closed))
 
 	// Write the messages v1, v2 and v3 in a different goroutine.
 	go func() {
-		top.Add("v1")
-		top.Add("v2", "v3")
+		top.Publish("v1")
+		top.Publish("v2", "v3")
+		close(closed)
 	}()
 
-	// Receive the to messages and print all values
+	// Receive the two messages and print all values.
 	var id uint64
 	var values []string
 	var err error
-	for id < 2 {
-		id, values, err = top.Get(context.Background(), id)
+	for {
+		id, values, err = top.Receive(context.Background(), id)
 		if err != nil {
 			// Handle Error:
-			fmt.Printf("Get() returned an unexpected error %v", err)
+			fmt.Printf("Retrive() returned an unexpected error %v", err)
+			return
+		}
+		if len(values) == 0 {
+			// When no values are returned, the topic is closed.
 			return
 		}
 		// Process values:

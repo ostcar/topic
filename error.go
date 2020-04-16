@@ -2,8 +2,8 @@ package topic
 
 import "strconv"
 
-// UnknownIDError is returned by Get() when a topic id is requested, that is lower
-// then the lowest id in the topic.
+// UnknownIDError is returned by Retrive() when a topic id is requested, that is
+// lower then the lowest id in the topic.
 type UnknownIDError struct {
 	// FirstID is the lowest id in the topic.
 	FirstID uint64
@@ -13,5 +13,5 @@ type UnknownIDError struct {
 }
 
 func (e UnknownIDError) Error() string {
-	return "id " + strconv.FormatUint(e.ID, 10) + " is unknown in topic. Lowest id is " + strconv.FormatUint(e.FirstID, 10)
+	return "id " + strconv.FormatUint(e.ID, 10) + " is unknown in the topic. Lowest id is " + strconv.FormatUint(e.FirstID, 10)
 }

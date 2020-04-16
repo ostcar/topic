@@ -7,8 +7,9 @@ import (
 )
 
 // Topic is a datastructure that holds a set of strings. Each time a list of
-// strings are added to the topic, a new id is created. It is possible to get
-// all strings at once or the strings that added after a specivic id.
+// strings are published by the topic, a new id is created. It is possible to
+// retrive all strings at once or the strings that published after a specivic
+// id.
 //
 // A Topic has to be created with the topic.New() function.
 //
@@ -24,10 +25,10 @@ type Topic struct {
 	tail  *node
 	index map[uint64]*node
 
-	// The signal channel is closed when data is added to the topic to signal
-	// all listening Get()-calls. After closing the channel, a new channel is
-	// created and saved into this variable, so other Get()-calls can listen on
-	// it.
+	// The signal channel is closed when data is published by the topic to
+	// signal all listening Retrive()-calls. After closing the channel, a new
+	// channel is created and saved into this variable, so other Retrive()-calls
+	// can listen on it.
 	signal chan struct{}
 }
 
@@ -45,11 +46,11 @@ func New(options ...Option) *Topic {
 	return top
 }
 
-// Add adds a list of strings to a topic. It creates a new id and returns it.
-// All waiting Get()-calls are awakened.
+// Publish adds a list of strings to a topic. It creates a new id and returns
+// it. All waiting Retrive()-calls are awakened.
 //
-// Add() inserts the values in constant time.
-func (t *Topic) Add(value ...string) uint64 {
+// Publish() inserts the values in constant time.
+func (t *Topic) Publish(value ...string) uint64 {
 	if len(value) == 0 {
 		return t.LastID()
 	}
@@ -72,44 +73,45 @@ func (t *Topic) Add(value ...string) uint64 {
 
 	t.index[newNode.id] = newNode
 
-	// Closes the signal channel to signal all Get()-calls. To overwrite the
+	// Closes the signal channel to signal all Retrive()-calls. To overwrite the
 	// value afterwars is not a race condition. Since the go-implementation of a
-	// channel is a pointer-type, a new object is created, while the Get()-calls
-	// keep listening on the old object.
+	// channel is a pointer-type, a new object is created, while the
+	// Retrive()-calls keep listening on the old object.
 	close(t.signal)
 	t.signal = make(chan struct{})
 
 	return newNode.id
 }
 
-// Get returns a slice of unique strings from the topic. If id is 0, all strings
-// are returned, else, all strings that where inserted after the id are
+// Receive returns a slice of unique strings from the topic. If id is 0, all
+// strings are returned, else, all strings that where inserted after the id are
 // returned.
 //
 // If the id is lower then the lowest id in the topic, an error of type
 // ErrUnknownTopicID is returned.
 //
-// If there is no new data, Get() blocks until threre is new data or the topic
-// is closed or the given context is canceled. The same happens with id 0, when
-// there is no data at all in the topic.
+// If there is no new data, Receive() blocks until threre is new data or the
+// topic is closed or the given context is canceled. The same happens with id 0,
+// when there is no data at all in the topic.
 //
-// If the topic is already closed or the context is canceled, Get() is always
-// unblocking. On existing ids it returns the values as before. On the ids equal
-// or higher to the highest id, it returns nil.
+// If the topic is already closed or the context is canceled, Receive() is
+// always unblocking. On existing ids it returns the values as before. On the
+// ids equal or higher to the highest id, it returns nil.
 //
-// If the data is available, Get() returns in O(n) where n is the number of
+// If the data is available, Receive() returns in O(n) where n is the number of
 // values in the topic since the given id.
-func (t *Topic) Get(ctx context.Context, id uint64) (uint64, []string, error) {
+func (t *Topic) Receive(ctx context.Context, id uint64) (uint64, []string, error) {
 	t.mu.RLock()
 
-	// Request data, that is not in the topic yet. Block until the next Add() call.
+	// Request data, that is not in the topic yet. Block until the next
+	// Publish() call.
 	if t.tail == nil || id >= t.tail.id {
 		c := t.signal
 		t.mu.RUnlock()
 
 		select {
 		case <-c:
-			return t.Get(ctx, id)
+			return t.Receive(ctx, id)
 		case <-t.closed:
 		case <-ctx.Done():
 		}
