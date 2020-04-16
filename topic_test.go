@@ -182,6 +182,13 @@ func TestLastID(t *testing.T) {
 			func(top *topic.Topic) {},
 			0,
 		},
+		{
+			"Add no value",
+			func(top *topic.Topic) {
+				top.Add()
+			},
+			0,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			top := topic.New()
