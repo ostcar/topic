@@ -2,7 +2,7 @@ package topic
 
 import "strconv"
 
-// UnknownIDError is returned by Retrive() when a topic id is requested, that is
+// UnknownIDError is returned by Receive() when a topic id is requested, that is
 // lower then the lowest id in the topic.
 type UnknownIDError struct {
 	// FirstID is the lowest id in the topic.

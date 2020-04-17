@@ -26,7 +26,7 @@ func ExampleTopic() {
 		id, values, err = top.Receive(context.Background(), id)
 		if err != nil {
 			// Handle Error:
-			fmt.Printf("Retrive() returned an unexpected error %v", err)
+			fmt.Printf("Receive() returned an unexpected error %v", err)
 			return
 		}
 		if len(values) == 0 {
