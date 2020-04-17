@@ -8,7 +8,7 @@ import (
 
 // Topic is a datastructure that holds a set of strings. Each time a list of
 // strings are published by the topic, a new id is created. It is possible to
-// retrive all strings at once or the strings that published after a specivic
+// receive all strings at once or the strings that published after a specivic
 // id.
 //
 // A Topic has to be created with the topic.New() function.
@@ -26,8 +26,8 @@ type Topic struct {
 	index map[uint64]*node
 
 	// The signal channel is closed when data is published by the topic to
-	// signal all listening Retrive()-calls. After closing the channel, a new
-	// channel is created and saved into this variable, so other Retrive()-calls
+	// signal all listening Receive()-calls. After closing the channel, a new
+	// channel is created and saved into this variable, so other Receive()-calls
 	// can listen on it.
 	signal chan struct{}
 }
@@ -47,7 +47,7 @@ func New(options ...Option) *Topic {
 }
 
 // Publish adds a list of strings to a topic. It creates a new id and returns
-// it. All waiting Retrive()-calls are awakened.
+// it. All waiting Receive()-calls are awakened.
 //
 // Publish() inserts the values in constant time.
 func (t *Topic) Publish(value ...string) uint64 {
@@ -73,10 +73,10 @@ func (t *Topic) Publish(value ...string) uint64 {
 
 	t.index[newNode.id] = newNode
 
-	// Closes the signal channel to signal all Retrive()-calls. To overwrite the
+	// Closes the signal channel to signal all Receive()-calls. To overwrite the
 	// value afterwars is not a race condition. Since the go-implementation of a
 	// channel is a pointer-type, a new object is created, while the
-	// Retrive()-calls keep listening on the old object.
+	// Receive()-calls keep listening on the old object.
 	close(t.signal)
 	t.signal = make(chan struct{})
 

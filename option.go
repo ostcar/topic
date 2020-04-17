@@ -4,7 +4,7 @@ package topic
 type Option func(*Topic)
 
 // WithClosed adds a close-channel to the topic. When the given channel is
-// closed, all waiting Retrive()-calls get unblocked.
+// closed, all waiting Receive()-calls get unblocked.
 func WithClosed(closed <-chan struct{}) Option {
 	return func(top *Topic) {
 		top.closed = closed

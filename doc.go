@@ -59,31 +59,31 @@ ignored.
 
 Receive messages
 
-Messages can be received with the Retrive()-method:
+Messages can be received with the Receive()-method:
 
-    id, values, err := top.Retrive(context.Background(), 0)
+    id, values, err := top.Receive(context.Background(), 0)
 
 The first returned value is the id creates by the last Publish()-call. The
 second value is a slice of all all message that where published before. Each
 value in the returned slice is unique.
 
-To receive newer values, Retrive() can be called again with the id from the last
+To receive newer values, Receive() can be called again with the id from the last
 call:
 
-    id, values, err := top.Retrive(context.Background(), 0)
+    id, values, err := top.Receive(context.Background(), 0)
     ...
-    id, values, err = top.Retrive(context.Background(), id)
+    id, values, err = top.Receive(context.Background(), id)
 
 When the given id is zero, then all messages are returned. If the id is greater
 then zero, then only messages are returned, that where published by the topic
 after the id was created.
 
-When there are no new values in the topic, then the Retrive()-call blocks until
+When there are no new values in the topic, then the Receive()-call blocks until
 there are new values. To add a timeout to the call, the context can be used:
 
     ctx, close := context.WithTimeout(context.Background(), 10*time.Second)
     defer close()
-    id, values, err = top.Retrive(ctx, id)
+    id, values, err = top.Receive(ctx, id)
 
 If there are no new values before the context is canceled, the returned values
 is nil. The same happens, when the topic is closed. In any other case the
@@ -98,7 +98,7 @@ The usual pattern to subscibe to a topic is:
     defer cancel()
 
     for {
-        id, values, err = top.Retrive(ctx, id)
+        id, values, err = top.Receive(ctx, id)
         if err != nil {
             // Handle error
         }
@@ -120,19 +120,19 @@ should be processed, that where published after the loop starts, the method
 LastID() can be used:
 
     id := top.LastID()
-    id, values, err = top.Retrive(context.Background(), id)
+    id, values, err = top.Receive(context.Background(), id)
 
-The return value of LastID() is the highest id in the topic. So a Retrive() call
+The return value of LastID() is the highest id in the topic. So a Receive() call
 on top.LastID() will only return data, that were published after the call.
 
-A pattern to retrive only new data is:
+A pattern to receive only new data is:
 
     id := top.LastID()
     var values []string
     var err error
 
     for {
-        id, values, err = top.Retrive(context.Background(), id)
+        id, values, err = top.Receive(context.Background(), id)
         if err != nil {
             // Handle error
         }
@@ -156,8 +156,8 @@ This call will remove all values in the topic, that are older then ten minutes.
 
 Make sure, that all receivers have read the values before they are pruned.
 
-If a Retrive()-call tries to receive pruned values, it will return with the
+If a Receive()-call tries to receive pruned values, it will return with the
 error topic.ErrUnknownID. In fact, this is the only case, where a call to
-Retrive() can return an error.
+Receive() can return an error.
 */
 package topic

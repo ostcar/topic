@@ -9,11 +9,11 @@ import (
 	"github.com/ostcar/topic"
 )
 
-func TestPublishRetrive(t *testing.T) {
+func TestPublishReceive(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
 		f         func(*topic.Topic)
-		retriveID uint64
+		receiveID uint64
 		expect    []string
 	}{
 		{
@@ -43,7 +43,7 @@ func TestPublishRetrive(t *testing.T) {
 			values("v1"),
 		},
 		{
-			"Retrive only second value",
+			"Receive only second value",
 			func(top *topic.Topic) {
 				top.Publish("v1")
 				top.Publish("v2")
@@ -56,7 +56,7 @@ func TestPublishRetrive(t *testing.T) {
 			top := topic.New()
 			tt.f(top)
 
-			_, got, err := top.Receive(context.Background(), tt.retriveID)
+			_, got, err := top.Receive(context.Background(), tt.receiveID)
 
 			if err != nil {
 				t.Errorf("Did not expect an error, got: %v", err)
@@ -72,7 +72,7 @@ func TestPrune(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
 		f         func(*topic.Topic) time.Time
-		retriveID uint64
+		receiveID uint64
 		expect    []string
 	}{
 		{
@@ -126,7 +126,7 @@ func TestPrune(t *testing.T) {
 
 			_, got, err := top.Receive(context.Background(), 0)
 			if err != nil {
-				t.Errorf("Retrive() returned an unexpected error %v", err)
+				t.Errorf("Receive() returned an unexpected error %v", err)
 			}
 			if !cmpSlice(got, tt.expect) {
 				t.Errorf("Got %v, want %v", got, tt.expect)
@@ -204,8 +204,8 @@ func TestLastID(t *testing.T) {
 	}
 }
 
-func TestRetriveBlocking(t *testing.T) {
-	// Tests, that Retrive() blocks until there is new data.
+func TestReceiveBlocking(t *testing.T) {
+	// Tests, that Receive() blocks until there is new data.
 	top := topic.New()
 
 	// Publish a value after a short time.
@@ -214,144 +214,144 @@ func TestRetriveBlocking(t *testing.T) {
 		top.Publish("value")
 	}()
 
-	// Send values as soon as Retrive() returnes.
+	// Send values as soon as Receive() returnes.
 	received := make(chan []string)
 	go func() {
 		_, got, err := top.Receive(context.Background(), 0)
 		if err != nil {
-			t.Errorf("Retrive() returned the unexpected error %v", err)
+			t.Errorf("Receive() returned the unexpected error %v", err)
 		}
 		received <- got
 	}()
 
-	// Retrive() should return before the timer is over.
+	// Receive() should return before the timer is over.
 	timer := time.NewTimer(100 * time.Millisecond)
 	defer timer.Stop()
 	select {
 	case got := <-received:
 		if !cmpSlice(got, values("value")) {
-			t.Errorf("Retrive() returned %v, expected [value]", got)
+			t.Errorf("Receive() returned %v, expected [value]", got)
 		}
 	case <-timer.C:
-		t.Errorf("Retrive() blocked for more then 100 Milliseconds, expected to get data.")
+		t.Errorf("Receive() blocked for more then 100 Milliseconds, expected to get data.")
 	}
 }
 
 func TestBlockUntilClose(t *testing.T) {
-	// Tests, that Retrive() unblocks, when the topic is closed.
+	// Tests, that Receive() unblocks, when the topic is closed.
 	closed := make(chan struct{})
 	top := topic.New(topic.WithClosed(closed))
 
-	// Send values as soon as Retrive() returnes.
+	// Send values as soon as Receive() returnes.
 	received := make(chan []string)
 	go func() {
 		_, got, err := top.Receive(context.Background(), 0)
 		if err != nil {
-			t.Errorf("Retrive() returned the unexpected error %v", err)
+			t.Errorf("Receive() returned the unexpected error %v", err)
 		}
 		received <- got
 	}()
 
-	// Retrive() should not return before the timer.
+	// Receive() should not return before the timer.
 	timer := time.NewTimer(time.Millisecond)
 	defer timer.Stop()
 	select {
 	case <-received:
-		t.Errorf("Retrive() returned before the topic was closed.")
+		t.Errorf("Receive() returned before the topic was closed.")
 	case <-timer.C:
 		// Close the topic after some time.
 		close(closed)
 	}
 
-	// Retrive should return after the topic was closed.
+	// Receive should return after the topic was closed.
 	timer.Reset(100 * time.Millisecond)
 	select {
 	case got := <-received:
 		if !cmpSlice(got, values()) {
-			t.Errorf("Retrive() returned %v, expected []", got)
+			t.Errorf("Receive() returned %v, expected []", got)
 		}
 	case <-timer.C:
-		t.Errorf("Retrive() blocked for emore then 100 Milliseconds, expected to unblock after topic is closed.")
+		t.Errorf("Receive() blocked for emore then 100 Milliseconds, expected to unblock after topic is closed.")
 	}
 }
 
 func TestBlockUntilContexDone(t *testing.T) {
-	// Tests, that Retrive() unblocks, when the context is canceled
+	// Tests, that Receive() unblocks, when the context is canceled
 	top := topic.New()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Send values as soon as Retrive() returnes.
+	// Send values as soon as Receive() returnes.
 	received := make(chan []string)
 	go func() {
 		_, got, err := top.Receive(ctx, 0)
 		if err != nil {
-			t.Errorf("Retrive() returned the unexpected error %v", err)
+			t.Errorf("Receive() returned the unexpected error %v", err)
 		}
 		received <- got
 	}()
 
-	// Retrive() should not return before the timer.
+	// Receive() should not return before the timer.
 	timer := time.NewTimer(time.Millisecond)
 	defer timer.Stop()
 	select {
 	case <-received:
-		t.Errorf("Retrive() returned before the context was canceled.")
+		t.Errorf("Receive() returned before the context was canceled.")
 	case <-timer.C:
 		// Cancel the context after some time.
 		cancel()
 	}
 
-	// Retrive should return after context was canceled.
+	// Receive should return after context was canceled.
 	timer.Reset(100 * time.Millisecond)
 	select {
 	case got := <-received:
 		if !cmpSlice(got, values()) {
-			t.Errorf("Retrive() returned %v, expected []", got)
+			t.Errorf("Receive() returned %v, expected []", got)
 		}
 	case <-timer.C:
-		t.Errorf("Retrive() blocked for emore then 100 Milliseconds, expected to unblock after the context was canceled.")
+		t.Errorf("Receive() blocked for emore then 100 Milliseconds, expected to unblock after the context was canceled.")
 	}
 }
 
 func TestBlockOnHighestID(t *testing.T) {
-	// Test, that Retrive() blocks on a non empty topic when the highest id is requested.
+	// Test, that Receive() blocks on a non empty topic when the highest id is requested.
 	top := topic.New()
 	top.Publish("v1")
 	top.Publish("v2")
 	highestID := top.Publish("v3")
 
-	// Close done channel, after Retrive() unblocks.
+	// Close done channel, after Receive() unblocks.
 	done := make(chan struct{})
 	go func() {
 		if _, _, err := top.Receive(context.Background(), highestID); err != nil {
-			t.Errorf("Retrive() returned the unexpected error %v", err)
+			t.Errorf("Receive() returned the unexpected error %v", err)
 		}
 		close(done)
 	}()
 
-	// Retrive should not return before the timer
+	// Receive should not return before the timer
 	timer := time.NewTimer(time.Millisecond)
 	defer timer.Stop()
 	select {
 	case <-done:
-		t.Errorf("Retrive() returned before the done-channel was closed.")
+		t.Errorf("Receive() returned before the done-channel was closed.")
 	case <-timer.C:
 		// Publish another value, this should unblock the topic.
 		top.Publish("v4")
 	}
 
-	// Retrive should return after context was canceled.
+	// Receive should return after context was canceled.
 	timer.Reset(100 * time.Millisecond)
 	select {
 	case <-done:
 	case <-timer.C:
-		t.Errorf("Retrive() blocked for emore then 100 Milliseconds, expected to unblock after another value was published.")
+		t.Errorf("Receive() blocked for emore then 100 Milliseconds, expected to unblock after another value was published.")
 	}
 }
 
-func TestRetriveOnClosedTopic(t *testing.T) {
-	// Test, that a Retrive()-call on a already closed topic returnes
+func TestReceiveOnClosedTopic(t *testing.T) {
+	// Test, that a Receive()-call on a already closed topic returnes
 	// immediately with all values.
 	closed := make(chan struct{})
 	top := topic.New(topic.WithClosed(closed))
@@ -359,74 +359,74 @@ func TestRetriveOnClosedTopic(t *testing.T) {
 	highestID := top.Publish("v2")
 	close(closed)
 
-	// When the topic is closed, Retrive(0) should still return its data.
+	// When the topic is closed, Receive(0) should still return its data.
 	_, got, err := top.Receive(context.Background(), 0)
 	if err != nil {
-		t.Errorf("Retrive() returned the unexpected error %v", err)
+		t.Errorf("Receive() returned the unexpected error %v", err)
 	}
 	if !cmpSlice(got, values("v1", "v2")) {
-		t.Errorf("Retrive() returned %v, expected [v1 v2]", got)
+		t.Errorf("Receive() returned %v, expected [v1 v2]", got)
 	}
 
-	// Send values as soon as Retrive() returnes.
+	// Send values as soon as Receive() returnes.
 	received := make(chan []string)
 	go func() {
 		_, got, err := top.Receive(context.Background(), highestID+100)
 		if err != nil {
-			t.Errorf("Retrive() returned the unexpected error %v", err)
+			t.Errorf("Receive() returned the unexpected error %v", err)
 		}
 		received <- got
 	}()
 
-	// Retrive() should return immediately.
+	// Receive() should return immediately.
 	timer := time.NewTimer(time.Millisecond)
 	defer timer.Stop()
 	select {
 	case got := <-received:
 		if got != nil {
-			t.Errorf("Retrive() returned %v, expected nil", got)
+			t.Errorf("Receive() returned %v, expected nil", got)
 		}
 	case <-timer.C:
-		t.Errorf("Retrive() blocked. Expect it to return immediately when the topic is closed.")
+		t.Errorf("Receive() blocked. Expect it to return immediately when the topic is closed.")
 	}
 }
 
-func TestRetriveOnCanceledChannel(t *testing.T) {
+func TestReceiveOnCanceledChannel(t *testing.T) {
 	top := topic.New()
 	top.Publish("v1")
 	highestID := top.Publish("v2")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	// When context is canceled, Retrive(0) should still return its data.
+	// When context is canceled, Receive(0) should still return its data.
 	_, got, err := top.Receive(ctx, 0)
 	if err != nil {
-		t.Errorf("Retrive() returned the unexpected error %v", err)
+		t.Errorf("Receive() returned the unexpected error %v", err)
 	}
 	if !cmpSlice(got, values("v1", "v2")) {
-		t.Errorf("Retrive() returned %v, expected [v1 v2]", got)
+		t.Errorf("Receive() returned %v, expected [v1 v2]", got)
 	}
 
-	// Send values as soon as Retrive() returnes.
+	// Send values as soon as Receive() returnes.
 	received := make(chan []string)
 	go func() {
 		_, got, err := top.Receive(ctx, highestID+100)
 		if err != nil {
-			t.Errorf("Retrive() returned the unexpected error %v", err)
+			t.Errorf("Receive() returned the unexpected error %v", err)
 		}
 		received <- got
 	}()
 
-	// Retrive() should return immediately.
+	// Receive() should return immediately.
 	timer := time.NewTimer(time.Millisecond)
 	defer timer.Stop()
 	select {
 	case got := <-received:
 		if got != nil {
-			t.Errorf("Retrive() returned %v, expected nil", got)
+			t.Errorf("Receive() returned %v, expected nil", got)
 		}
 	case <-timer.C:
-		t.Errorf("Retrive() blocked. Expect it to return immediately when the topic is closed.")
+		t.Errorf("Receive() blocked. Expect it to return immediately when the topic is closed.")
 	}
 }
 
