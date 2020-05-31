@@ -187,7 +187,7 @@ func TestLastID(t *testing.T) {
 			func(top *topic.Topic) {
 				top.Publish()
 			},
-			0,
+			1,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -428,6 +428,45 @@ func TestReceiveOnCanceledChannel(t *testing.T) {
 	case <-timer.C:
 		t.Errorf("Receive() blocked. Expect it to return immediately when the topic is closed.")
 	}
+}
+
+func TestWithStartID(t *testing.T) {
+	top := topic.New(topic.WithStartID(100))
+
+	t.Run("LastID", func(t *testing.T) {
+		if top.LastID() != 100 {
+			t.Errorf("LastID returned %d, expected 100", top.LastID())
+		}
+	})
+
+	t.Run("Receive", func(t *testing.T) {
+		id, value, err := top.Receive(context.Background(), 0)
+
+		if err != nil {
+			t.Errorf("Receive returned err %v", err)
+		}
+
+		if id != 100 {
+			t.Errorf("Receive returned id %d, expected 100", id)
+		}
+
+		if !cmpSlice(value, []string{}) {
+			t.Errorf("Receive returned values %v, expected no data", value)
+		}
+	})
+
+	t.Run("Publish", func(t *testing.T) {
+		id := top.Publish("value")
+
+		if id != 101 {
+			t.Errorf("Publish returned id %d, expected 101", id)
+		}
+
+		if _, got, _ := top.Receive(context.Background(), 0); !cmpSlice(got, []string{"value"}) {
+			t.Errorf("Receive returned %v, expected [value]", got)
+		}
+	})
+
 }
 
 func cmpSlice(one, two []string) bool {
