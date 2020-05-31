@@ -17,6 +17,6 @@ func WithStartID(id uint64) Option {
 		top.Publish()
 		top.head.id = id
 		delete(top.index, 1)
-		top.index[1] = top.head
+		top.index[id] = top.head
 	}
 }
