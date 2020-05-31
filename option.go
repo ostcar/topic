@@ -10,3 +10,13 @@ func WithClosed(closed <-chan struct{}) Option {
 		top.closed = closed
 	}
 }
+
+// WithStartID sets the lowest id of the topic to a given id.
+func WithStartID(id uint64) Option {
+	return func(top *Topic) {
+		top.Publish()
+		top.head.id = id
+		delete(top.index, 1)
+		top.index[1] = top.head
+	}
+}
