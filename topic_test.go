@@ -462,7 +462,19 @@ func TestWithStartID(t *testing.T) {
 			t.Errorf("Publish returned id %d, expected 101", id)
 		}
 
-		if _, got, _ := top.Receive(context.Background(), 0); !cmpSlice(got, []string{"value"}) {
+		_, got, err := top.Receive(context.Background(), 0)
+		if err != nil {
+			t.Errorf("Reciece(0) returned error %v", err)
+		}
+		if !cmpSlice(got, []string{"value"}) {
+			t.Errorf("Receive(0) returned %v, expected [value]", got)
+		}
+
+		_, got, err = top.Receive(context.Background(), 100)
+		if err != nil {
+			t.Errorf("Reciece(100) returned error %v", err)
+		}
+		if !cmpSlice(got, []string{"value"}) {
 			t.Errorf("Receive returned %v, expected [value]", got)
 		}
 	})
