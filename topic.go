@@ -180,9 +180,10 @@ type node struct {
 	value []string
 }
 
-// runNode returns all strings from a node and the following nodes. Each value is unique.
+// runNode returns all strings from a node and the following nodes. Each value
+// is unique. If there are no values, an empty slice (not nil) is returned.
 func runNode(n *node) []string {
-	var values []string
+	values := make([]string, 0)
 	seen := make(map[string]bool)
 	for ; n != nil; n = n.next {
 		for _, v := range n.value {
