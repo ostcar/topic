@@ -51,6 +51,15 @@ func TestPublishReceive(t *testing.T) {
 			1,
 			values("v2"),
 		},
+		{
+			"Publish empty values",
+			func(top *topic.Topic) {
+				top.Publish()
+				top.Publish()
+			},
+			1,
+			values(),
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			top := topic.New()
@@ -60,6 +69,9 @@ func TestPublishReceive(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("Did not expect an error, got: %v", err)
+			}
+			if got == nil {
+				t.Errorf("Got nil, topic was not closed")
 			}
 			if !cmpSlice(got, tt.expect) {
 				t.Errorf("Got %v, want %v", got, tt.expect)
@@ -478,7 +490,6 @@ func TestWithStartID(t *testing.T) {
 			t.Errorf("Receive returned %v, expected [value]", got)
 		}
 	})
-
 }
 
 func cmpSlice(one, two []string) bool {
