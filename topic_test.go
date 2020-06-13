@@ -2,6 +2,7 @@ package topic_test
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"testing"
 	"time"
@@ -70,9 +71,6 @@ func TestPublishReceive(t *testing.T) {
 			if err != nil {
 				t.Errorf("Did not expect an error, got: %v", err)
 			}
-			if got == nil {
-				t.Errorf("Got nil, topic was not closed")
-			}
 			if !cmpSlice(got, tt.expect) {
 				t.Errorf("Got %v, want %v", got, tt.expect)
 			}
@@ -138,7 +136,12 @@ func TestPrune(t *testing.T) {
 
 			_, got, err := top.Receive(context.Background(), 0)
 			if err != nil {
-				t.Errorf("Receive() returned an unexpected error %v", err)
+				var closing interface {
+					Closing()
+				}
+				if !errors.As(err, &closing) {
+					t.Errorf("Receive() returned an unexpected error %v", err)
+				}
 			}
 			if !cmpSlice(got, tt.expect) {
 				t.Errorf("Got %v, want %v", got, tt.expect)
@@ -258,8 +261,11 @@ func TestBlockUntilClose(t *testing.T) {
 	received := make(chan []string)
 	go func() {
 		_, got, err := top.Receive(context.Background(), 0)
-		if err != nil {
-			t.Errorf("Receive() returned the unexpected error %v", err)
+		var closing interface {
+			Closing()
+		}
+		if !errors.As(err, &closing) {
+			t.Errorf("Receive() returned an unexpected error %v", err)
 		}
 		received <- got
 	}()
@@ -297,7 +303,7 @@ func TestBlockUntilContexDone(t *testing.T) {
 	received := make(chan []string)
 	go func() {
 		_, got, err := top.Receive(ctx, 0)
-		if err != nil {
+		if !errors.Is(err, context.Canceled) {
 			t.Errorf("Receive() returned the unexpected error %v", err)
 		}
 		received <- got
@@ -384,7 +390,10 @@ func TestReceiveOnClosedTopic(t *testing.T) {
 	received := make(chan []string)
 	go func() {
 		_, got, err := top.Receive(context.Background(), highestID+100)
-		if err != nil {
+		var closing interface {
+			Closing()
+		}
+		if !errors.As(err, &closing) {
 			t.Errorf("Receive() returned the unexpected error %v", err)
 		}
 		received <- got
@@ -423,7 +432,7 @@ func TestReceiveOnCanceledChannel(t *testing.T) {
 	received := make(chan []string)
 	go func() {
 		_, got, err := top.Receive(ctx, highestID+100)
-		if err != nil {
+		if !errors.Is(err, context.Canceled) {
 			t.Errorf("Receive() returned the unexpected error %v", err)
 		}
 		received <- got
@@ -495,6 +504,10 @@ func TestWithStartID(t *testing.T) {
 func cmpSlice(one, two []string) bool {
 	if len(one) != len(two) {
 		return false
+	}
+
+	if len(one) == 0 && len(two) == 0 {
+		return true
 	}
 
 	sort.Strings(one)

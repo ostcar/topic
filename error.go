@@ -15,3 +15,8 @@ type UnknownIDError struct {
 func (e UnknownIDError) Error() string {
 	return "id " + strconv.FormatUint(e.ID, 10) + " is unknown in the topic. Lowest id is " + strconv.FormatUint(e.FirstID, 10)
 }
+
+type closingError struct{}
+
+func (e closingError) Error() string { return "topic was closed" }
+func (e closingError) Closing()      {}
