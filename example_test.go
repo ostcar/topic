@@ -2,6 +2,7 @@ package topic_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ostcar/topic"
@@ -25,14 +26,19 @@ func ExampleTopic() {
 	for {
 		id, values, err = top.Receive(context.Background(), id)
 		if err != nil {
+			var closing interface {
+				Closing()
+			}
+			if errors.As(err, &closing) {
+				// topic was closed
+				return
+			}
+
 			// Handle Error:
-			fmt.Printf("Receive() returned an unexpected error %v", err)
+			fmt.Printf("Receive() returned an unexpected error: %v", err)
 			return
 		}
-		if len(values) == 0 {
-			// When no values are returned, the topic is closed.
-			return
-		}
+
 		// Process values:
 		for _, v := range values {
 			fmt.Println(v)

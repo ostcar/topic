@@ -85,9 +85,12 @@ there are new values. To add a timeout to the call, the context can be used:
     defer close()
     id, values, err = top.Receive(ctx, id)
 
-If there are no new values before the context is canceled, the returned values
-is nil. The same happens, when the topic is closed. In any other case the
-returned values is a slice with at least one element.
+If there are no new values before the context is canceled, the topic returns
+with the error `context.Canceled`.
+
+A closed topic first returnes all its data. When there is no new data, the topic
+returnes with an error, that has the method `Closing()`.
+
 
 The usual pattern to subscibe to a topic is:
 
@@ -100,11 +103,18 @@ The usual pattern to subscibe to a topic is:
     for {
         id, values, err = top.Receive(ctx, id)
         if err != nil {
-            // Handle error
-        }
-        if len(values) == 0 {
-            // When no values are returned, the topic is closed or the context is canceled.
-            return
+            var closing interface {
+                Closing()
+            }
+            if errors.As(err, &closing) {
+                // The topic was closed
+                break
+            }
+            if errors.Is(err, context.Closing) {
+                // Context was canceled
+                break
+            }
+            // Handle other errors
         }
         // Process values
     }
@@ -136,10 +146,6 @@ A pattern to receive only new data is:
         if err != nil {
             // Handle error
         }
-        if len(values) == 0 {
-            // When no values are returned, the topic is closed or the context is canceled.
-            return
-        }
         // Process values
     }
 
@@ -157,7 +163,6 @@ This call will remove all values in the topic, that are older then ten minutes.
 Make sure, that all receivers have read the values before they are pruned.
 
 If a Receive()-call tries to receive pruned values, it will return with the
-error topic.ErrUnknownID. In fact, this is the only case, where a call to
-Receive() can return an error.
+error topic.ErrUnknownID.
 */
 package topic

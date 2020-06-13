@@ -91,8 +91,9 @@ func (t *Topic) Publish(value ...string) uint64 {
 // when there is no data at all in the topic.
 //
 // If the topic is already closed or the context is canceled, Receive() is
-// always unblocking. On existing ids it returns the values as before. On the
-// ids equal or higher to the highest id, it returns nil.
+// always unblocking. On existing it returns the values as before. On the ids
+// equal or higher to the highest id, it returns an error with the method
+// Closing().
 //
 // If the data is available, Receive() returns in O(n) where n is the number of
 // values in the topic since the given id.
@@ -105,11 +106,14 @@ func (t *Topic) Receive(ctx context.Context, id uint64) (uint64, []string, error
 		c := t.signal
 		t.mu.RUnlock()
 
+		var err error
 		select {
 		case <-c:
 			return t.Receive(ctx, id)
 		case <-t.closed:
+			err = closingError{}
 		case <-ctx.Done():
+			err = ctx.Err()
 		}
 
 		// In very rare cases, new data could be added to the topic at the same
@@ -120,8 +124,8 @@ func (t *Topic) Receive(ctx context.Context, id uint64) (uint64, []string, error
 			return t.Receive(ctx, id)
 		}
 
-		// The topic or the condext is closed. Return without data.
-		return id, nil, nil
+		// The topic or the condext is closed.
+		return id, nil, err
 	}
 
 	defer t.mu.RUnlock()
@@ -183,7 +187,7 @@ type node struct {
 // runNode returns all strings from a node and the following nodes. Each value
 // is unique. If there are no values, an empty slice (not nil) is returned.
 func runNode(n *node) []string {
-	values := make([]string, 0)
+	var values []string
 	seen := make(map[string]bool)
 	for ; n != nil; n = n.next {
 		for _, v := range n.value {
