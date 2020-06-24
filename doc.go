@@ -110,8 +110,8 @@ The usual pattern to subscibe to a topic is:
                 // The topic was closed
                 break
             }
-            if errors.Is(err, context.Closing) {
-                // Context was canceled
+            if errors.Is(err, context.DeadlineExceeded) {
+                // Timeout
                 break
             }
             // Handle other errors
