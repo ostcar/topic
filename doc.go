@@ -164,5 +164,29 @@ Make sure, that all receivers have read the values before they are pruned.
 
 If a Receive()-call tries to receive pruned values, it will return with the
 error topic.ErrUnknownID.
+
+
+Select
+
+To listen to two or more topics at the same time, topic.Select() can be used. It
+is simular to the golang select command. It takes a list of *topic.Case{}
+objects and returns the values from one of the topics. If every topic blocks,
+the Select-call also blocks until the first topic returns. The topic id of the
+returned case is updated, so the function can be called again with the same list
+of cases.
+
+    t1 := topic.New()
+    t2 := topic.New()
+
+    cases := []*topic.Case{
+        {Topic: t1},
+        {Topic: t2},
+    }
+
+    for {
+        idx, id, values, err := topic.Select(context.Background(), cases...)
+        // Handle returned values.
+    }
+
 */
 package topic
