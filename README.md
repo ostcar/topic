@@ -1,7 +1,7 @@
 # Topic
 
 [![Actions Status](https://github.com/ostcar/topic/workflows/Topic/badge.svg)](https://github.com/ostcar/topic/actions)
-[![GoDoc](https://godoc.org/github.com/ostcar/topic?status.svg)](https://pkg.go.dev/github.com/ostcar/topic)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/ostcar/topic)](https://pkg.go.dev/github.com/ostcar/topic)
 
 Package topic is an in process pubsub system where new values have to be pulled
 instead of beeing pushed.
