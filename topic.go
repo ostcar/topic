@@ -6,24 +6,30 @@ import (
 	"time"
 )
 
-// Topic is a datastructure that holds a set of strings. Each time a list of
-// strings are published by the topic, a new id is created. It is possible to
-// receive all strings at once or the strings that published after a specivic
-// id.
+// Topic is a datastructure that holds a set values. Values can be published to
+// a topic. Each time a list of values is published, a new id is created. It is
+// possible to receive all values at once or the values that published after a
+// specivic id.
 //
-// A Topic has to be created with the topic.New() function.
+// A Topic has to be created with the topic.New() function. For example
+// topic.New[string]().
 //
 // A Topic is save for concourent use.
-type Topic struct {
+//
+// The type of value is restricted to be a comparable. This is required, so the
+// topic.Receive function can return a list of unique values. This restriction
+// could be removed in a future version of go, if it will be possible to check
+// the type of a generic value.
+type Topic[T comparable] struct {
 	mu     sync.RWMutex
 	closed <-chan struct{}
 
 	// The topic is implemented by a linked list and an index from each id to
 	// the node. Therefore nodes get be added, retrieved and deleted from the
 	// top in constant time.
-	head  *node
-	tail  *node
-	index map[uint64]*node
+	head  *node[T]
+	tail  *node[T]
+	index map[uint64]*node[T]
 
 	// The signal channel is closed when data is published by the topic to
 	// signal all listening Receive()-calls. After closing the channel, a new
@@ -32,12 +38,14 @@ type Topic struct {
 	signal chan struct{}
 }
 
-// New creates a new topic. The topic can be initialized with a close channel
-// with the topic.WithClosed() option.
-func New(options ...Option) *Topic {
-	top := &Topic{
+// New creates a new topic.
+//
+// The topic can be initialized with a close channel with the topic.WithClosed()
+// option.
+func New[T comparable](options ...Option[T]) *Topic[T] {
+	top := &Topic[T]{
 		signal: make(chan struct{}),
-		index:  make(map[uint64]*node),
+		index:  make(map[uint64]*node[T]),
 	}
 
 	for _, o := range options {
@@ -46,15 +54,15 @@ func New(options ...Option) *Topic {
 	return top
 }
 
-// Publish adds a list of strings to a topic. It creates a new id and returns
+// Publish adds a list of values to a topic. It creates a new id and returns
 // it. All waiting Receive()-calls are awakened.
 //
 // Publish() inserts the values in constant time.
-func (t *Topic) Publish(value ...string) uint64 {
+func (t *Topic[T]) Publish(value ...T) uint64 {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	newNode := &node{}
+	newNode := &node[T]{}
 	var id uint64
 	if t.head == nil {
 		t.head = newNode
@@ -79,8 +87,8 @@ func (t *Topic) Publish(value ...string) uint64 {
 	return newNode.id
 }
 
-// Receive returns a slice of unique strings from the topic. If id is 0, all
-// strings are returned, else, all strings that where inserted after the id are
+// Receive returns a slice of unique values from the topic. If id is 0, all
+// values are returned, else, all values that where inserted after the id are
 // returned.
 //
 // If the id is lower then the lowest id in the topic, an error of type
@@ -91,13 +99,13 @@ func (t *Topic) Publish(value ...string) uint64 {
 // when there is no data at all in the topic.
 //
 // If the topic is already closed or the context is canceled, Receive() is
-// always unblocking. On existing it returns the values as before. On the ids
+// always unblocking. On exiting it returns the values as before. When the id
 // equal or higher to the highest id, it returns an error with the method
 // Closing().
 //
 // If the data is available, Receive() returns in O(n) where n is the number of
 // values in the topic since the given id.
-func (t *Topic) Receive(ctx context.Context, id uint64) (uint64, []string, error) {
+func (t *Topic[T]) Receive(ctx context.Context, id uint64) (uint64, []T, error) {
 	t.mu.RLock()
 
 	// Request data, that is not in the topic yet. Block until the next
@@ -142,10 +150,10 @@ func (t *Topic) Receive(ctx context.Context, id uint64) (uint64, []string, error
 	return t.tail.id, runNode(n.next), nil
 }
 
-// LastID returns the last if of topic. Returns 0 for an empty topic.
+// LastID returns the last id of the topic. Returns 0 for an empty topic.
 //
 // LastID returns in constant time.
-func (t *Topic) LastID() uint64 {
+func (t *Topic[T]) LastID() uint64 {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -159,7 +167,7 @@ func (t *Topic) LastID() uint64 {
 //
 // Prune has a complexity of O(n) where n is the count of all nodes that are
 // older then the given time.
-func (t *Topic) Prune(until time.Time) {
+func (t *Topic[T]) Prune(until time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -177,18 +185,18 @@ func (t *Topic) Prune(until time.Time) {
 }
 
 // node implements a linked list.
-type node struct {
+type node[T comparable] struct {
 	id    uint64
 	t     time.Time
-	next  *node
-	value []string
+	next  *node[T]
+	value []T
 }
 
-// runNode returns all strings from a node and the following nodes. Each value
-// is unique. If there are no values, an empty slice (not nil) is returned.
-func runNode(n *node) []string {
-	var values []string
-	seen := make(map[string]bool)
+// runNode returns all values from a node and the following nodes. Each value is
+// unique. If there are no values, an empty slice (not nil) is returned.
+func runNode[T comparable](n *node[T]) []T {
+	var values []T
+	seen := make(map[T]bool)
 	for ; n != nil; n = n.next {
 		for _, v := range n.value {
 			if !seen[v] {

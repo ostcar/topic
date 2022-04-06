@@ -11,7 +11,7 @@ import (
 func benchmarkPublishWithXReceivers(count int, b *testing.B) {
 	closed := make(chan struct{})
 	defer close(closed)
-	top := topic.New(topic.WithClosed(closed))
+	top := topic.New(topic.WithClosed[string](closed))
 	for i := 0; i < count; i++ {
 		// Starts a receiver that listens to the topic until the topic is closed.
 		go func() {
@@ -40,7 +40,7 @@ func BenchmarkPublishWithXReceivers1000(b *testing.B)  { benchmarkPublishWithXRe
 func BenchmarkPublishWithXReceivers10000(b *testing.B) { benchmarkPublishWithXReceivers(10_000, b) }
 
 func benchmarkRetrieveBigTopic(count int, b *testing.B) {
-	top := topic.New()
+	top := topic.New[string]()
 	for i := 0; i < count; i++ {
 		top.Publish("value" + strconv.Itoa(i))
 	}
@@ -59,7 +59,7 @@ func BenchmarkRetrieveBigTopic10000(b *testing.B)  { benchmarkRetrieveBigTopic(1
 func BenchmarkRetrieveBigTopic100000(b *testing.B) { benchmarkRetrieveBigTopic(100_000, b) }
 
 func benchmarkRetrieveLastBigTopic(count int, b *testing.B) {
-	top := topic.New()
+	top := topic.New[string]()
 	for i := 0; i < count; i++ {
 		top.Publish("value" + strconv.Itoa(i))
 	}

@@ -3,8 +3,8 @@ Package topic is a inmemory pubsub system where new values are pulled instead of
 beeing pushed.
 
 The idea of pulling updates is inspired by Kafka or Redis-Streams. A subscriber
-does not have to register or unsubscribe to a topic and can take as match time
-as it needs to process the messages. Therefore, the system is less error prone.
+does not have to register or unsubscribe to a topic and can take as much time as
+it needs to process the messages. Therefore, the system is less error prone.
 
 In common pubsub systems, the publisher pushes values to the receivers. The
 problem with this pattern is, that the publisher could send messages faster,
@@ -18,7 +18,7 @@ messages.
 A third pattern is, that the publisher does not push the values, but the
 receivers has to pull them. The publisher can save values without waiting on
 slow receivers. A receiver has all the time it needs to process messages and can
-pull again as soon as the work is done. This packet implements this third
+pull again as soon as the work is done. This packet implements the third
 pattern.
 
 Another benefit of this pattern is, that a receiver does not have to register on
@@ -31,13 +31,13 @@ Create new topic
 
 To create a new topic use the topic.New() constructor:
 
-    top := topic.New()
+    top := topic.New[string]()
 
 Optionally the topic can be initialized with a close-channel. When the channel
 is closed, receivers know when to finish reading:
 
     closed := make(chan struct{})
-    top := topic.New(topic.WithClosed(closed))
+    top := topic.New(topic.WithClosed[string](closed))
     ...
     close(closed)
 
@@ -86,7 +86,7 @@ there are new values. To add a timeout to the call, the context can be used:
     id, values, err = top.Receive(ctx, id)
 
 If there are no new values before the context is canceled, the topic returns
-with the error `context.Canceled`.
+with the error `context.DeadlineExceeded`.
 
 A closed topic first returnes all its data. When there is no new data, the topic
 returnes with an error, that has the method `Closing()`.
