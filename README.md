@@ -14,13 +14,13 @@ process the messages.
 
 ## How to use topic
 
-A topic can be created with: `top := topic.New()`.
+A topic can be created with: `top := topic.New[string]()`.
 
 To publish one or more values, use: `top.Publish("info1", "info2")`.
 
 To receive values for the first time use: `id, values, err := top.Receive(ctx,
 0)`. The first value is a numeric id, it is needed for for next call of
-`top.Receive()`. The second argument is a list of all strings that where
+`top.Receive()`. The second argument is a list of all values that where
 published by this topic.
 
 To receive newer values, use `id, values, err = top.Receive(ctx, id)`. It

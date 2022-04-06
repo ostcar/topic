@@ -13,13 +13,13 @@ import (
 func TestPublishReceive(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
-		f         func(*topic.Topic)
+		f         func(*topic.Topic[string])
 		receiveID uint64
 		expect    []string
 	}{
 		{
 			"Publish two values at once",
-			func(top *topic.Topic) {
+			func(top *topic.Topic[string]) {
 				top.Publish("v1", "v2")
 			},
 			0,
@@ -27,7 +27,7 @@ func TestPublishReceive(t *testing.T) {
 		},
 		{
 			"Publish two values one by one",
-			func(top *topic.Topic) {
+			func(top *topic.Topic[string]) {
 				top.Publish("v1")
 				top.Publish("v2")
 			},
@@ -36,7 +36,7 @@ func TestPublishReceive(t *testing.T) {
 		},
 		{
 			"Publish same value twice",
-			func(top *topic.Topic) {
+			func(top *topic.Topic[string]) {
 				top.Publish("v1")
 				top.Publish("v1")
 			},
@@ -45,7 +45,7 @@ func TestPublishReceive(t *testing.T) {
 		},
 		{
 			"Receive only second value",
-			func(top *topic.Topic) {
+			func(top *topic.Topic[string]) {
 				top.Publish("v1")
 				top.Publish("v2")
 			},
@@ -54,7 +54,7 @@ func TestPublishReceive(t *testing.T) {
 		},
 		{
 			"Publish empty values",
-			func(top *topic.Topic) {
+			func(top *topic.Topic[string]) {
 				top.Publish()
 				top.Publish()
 			},
@@ -63,7 +63,7 @@ func TestPublishReceive(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			top := topic.New()
+			top := topic.New[string]()
 			tt.f(top)
 
 			_, got, err := top.Receive(context.Background(), tt.receiveID)
@@ -81,13 +81,13 @@ func TestPublishReceive(t *testing.T) {
 func TestPrune(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
-		f         func(*topic.Topic) time.Time
+		f         func(*topic.Topic[string]) time.Time
 		receiveID uint64
 		expect    []string
 	}{
 		{
 			"Prune after two values",
-			func(top *topic.Topic) time.Time {
+			func(top *topic.Topic[string]) time.Time {
 				top.Publish("v1")
 				top.Publish("v2")
 				pruneTime := time.Now()
@@ -100,7 +100,7 @@ func TestPrune(t *testing.T) {
 		},
 		{
 			"Prune on empty topic",
-			func(top *topic.Topic) time.Time {
+			func(top *topic.Topic[string]) time.Time {
 				return time.Now()
 			},
 			0,
@@ -108,7 +108,7 @@ func TestPrune(t *testing.T) {
 		},
 		{
 			"Prune on topic with one element",
-			func(top *topic.Topic) time.Time {
+			func(top *topic.Topic[string]) time.Time {
 				top.Publish("v1")
 				return time.Now()
 			},
@@ -117,7 +117,7 @@ func TestPrune(t *testing.T) {
 		},
 		{
 			"Do not prune last element",
-			func(top *topic.Topic) time.Time {
+			func(top *topic.Topic[string]) time.Time {
 				top.Publish("v1")
 				top.Publish("v2")
 				return time.Now()
@@ -129,7 +129,7 @@ func TestPrune(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			closed := make(chan struct{})
 			close(closed)
-			top := topic.New(topic.WithClosed(closed))
+			top := topic.New(topic.WithClosed[string](closed))
 			pruneTime := tt.f(top)
 
 			top.Prune(pruneTime)
@@ -151,7 +151,7 @@ func TestPrune(t *testing.T) {
 }
 
 func TestErrUnknownID(t *testing.T) {
-	top := topic.New()
+	top := topic.New[string]()
 	top.Publish("v1")
 	top.Publish("v2")
 	ti := time.Now()
@@ -180,12 +180,12 @@ func TestErrUnknownID(t *testing.T) {
 func TestLastID(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
-		f      func(*topic.Topic)
+		f      func(*topic.Topic[string])
 		expect uint64
 	}{
 		{
 			"Different values",
-			func(top *topic.Topic) {
+			func(top *topic.Topic[string]) {
 				top.Publish("v1")
 				top.Publish("v2")
 				top.Publish("v3")
@@ -194,19 +194,19 @@ func TestLastID(t *testing.T) {
 		},
 		{
 			"Empty Topic",
-			func(top *topic.Topic) {},
+			func(top *topic.Topic[string]) {},
 			0,
 		},
 		{
 			"Publish no value",
-			func(top *topic.Topic) {
+			func(top *topic.Topic[string]) {
 				top.Publish()
 			},
 			1,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			top := topic.New()
+			top := topic.New[string]()
 			tt.f(top)
 
 			got := top.LastID()
@@ -221,7 +221,7 @@ func TestLastID(t *testing.T) {
 
 func TestReceiveBlocking(t *testing.T) {
 	// Tests, that Receive() blocks until there is new data.
-	top := topic.New()
+	top := topic.New[string]()
 
 	// Publish a value after a short time.
 	go func() {
@@ -255,7 +255,7 @@ func TestReceiveBlocking(t *testing.T) {
 func TestBlockUntilClose(t *testing.T) {
 	// Tests, that Receive() unblocks, when the topic is closed.
 	closed := make(chan struct{})
-	top := topic.New(topic.WithClosed(closed))
+	top := topic.New(topic.WithClosed[string](closed))
 
 	// Send values as soon as Receive() returnes.
 	received := make(chan []string)
@@ -295,7 +295,7 @@ func TestBlockUntilClose(t *testing.T) {
 
 func TestBlockUntilContexDone(t *testing.T) {
 	// Tests, that Receive() unblocks, when the context is canceled
-	top := topic.New()
+	top := topic.New[string]()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -334,7 +334,7 @@ func TestBlockUntilContexDone(t *testing.T) {
 
 func TestBlockOnHighestID(t *testing.T) {
 	// Test, that Receive() blocks on a non empty topic when the highest id is requested.
-	top := topic.New()
+	top := topic.New[string]()
 	top.Publish("v1")
 	top.Publish("v2")
 	highestID := top.Publish("v3")
@@ -372,7 +372,7 @@ func TestReceiveOnClosedTopic(t *testing.T) {
 	// Test, that a Receive()-call on a already closed topic returnes
 	// immediately with all values.
 	closed := make(chan struct{})
-	top := topic.New(topic.WithClosed(closed))
+	top := topic.New(topic.WithClosed[string](closed))
 	top.Publish("v1")
 	highestID := top.Publish("v2")
 	close(closed)
@@ -413,7 +413,7 @@ func TestReceiveOnClosedTopic(t *testing.T) {
 }
 
 func TestReceiveOnCanceledChannel(t *testing.T) {
-	top := topic.New()
+	top := topic.New[string]()
 	top.Publish("v1")
 	highestID := top.Publish("v2")
 	ctx, cancel := context.WithCancel(context.Background())
@@ -452,7 +452,7 @@ func TestReceiveOnCanceledChannel(t *testing.T) {
 }
 
 func TestWithStartID(t *testing.T) {
-	top := topic.New(topic.WithStartID(100))
+	top := topic.New(topic.WithStartID[string](100))
 
 	t.Run("LastID", func(t *testing.T) {
 		if top.LastID() != 100 {
@@ -499,6 +499,46 @@ func TestWithStartID(t *testing.T) {
 			t.Errorf("Receive returned %v, expected [value]", got)
 		}
 	})
+}
+
+func TestTopicWithStruct(t *testing.T) {
+	type myType struct {
+		number int
+		str    string
+	}
+	top := topic.New[myType]()
+	top.Publish(myType{5, "foobar"})
+	top.Publish(myType{5, "foobar"})
+
+	_, values, err := top.Receive(context.Background(), 0)
+	if err != nil {
+		t.Errorf("receive: %v", err)
+	}
+
+	expect := myType{5, "foobar"}
+	if len(values) != 1 || values[0] != expect {
+		t.Errorf("got %v, expected [%v]", values, expect)
+	}
+}
+
+func TestTopicWithPointer(t *testing.T) {
+	type myType struct {
+		number int
+		str    string
+	}
+	top := topic.New[*myType]()
+	top.Publish(&myType{5, "foobar"})
+	top.Publish(&myType{5, "foobar"})
+
+	_, values, err := top.Receive(context.Background(), 0)
+	if err != nil {
+		t.Errorf("receive: %v", err)
+	}
+
+	expect := myType{5, "foobar"}
+	if len(values) != 2 || *values[0] != expect || *values[1] != expect {
+		t.Errorf("got %v, expected [%v %v]", values, expect, expect)
+	}
 }
 
 func cmpSlice(one, two []string) bool {

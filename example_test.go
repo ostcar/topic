@@ -10,7 +10,7 @@ import (
 
 func ExampleTopic() {
 	closed := make(chan struct{})
-	top := topic.New(topic.WithClosed(closed))
+	top := topic.New(topic.WithClosed[string](closed))
 
 	// Write the messages v1, v2 and v3 in a different goroutine.
 	go func() {
