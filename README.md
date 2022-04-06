@@ -34,3 +34,10 @@ A topic is save for concurrent use.
 Contibutions are wellcome. Please make sure that the tests are running with:
 
 ```go test```
+
+
+## Who is using topic
+
+Topic was build for [OpenSlides](https://openslides.com) and is used in
+production for the
+[Autoupdate-Service](https://github.com/openslides/openslides-autoupdate-service)
