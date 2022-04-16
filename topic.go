@@ -21,8 +21,7 @@ import (
 // could be removed in a future version of go, if it will be possible to check
 // the type of a generic value.
 type Topic[T comparable] struct {
-	mu     sync.RWMutex
-	closed <-chan struct{}
+	mu sync.RWMutex
 
 	// The topic is implemented by a linked list and an index from each id to
 	// the node. Therefore nodes get be added, retrieved and deleted from the
@@ -39,18 +38,12 @@ type Topic[T comparable] struct {
 }
 
 // New creates a new topic.
-//
-// The topic can be initialized with a close channel with the topic.WithClosed()
-// option.
-func New[T comparable](options ...Option[T]) *Topic[T] {
+func New[T comparable]() *Topic[T] {
 	top := &Topic[T]{
 		signal: make(chan struct{}),
 		index:  make(map[uint64]*node[T]),
 	}
 
-	for _, o := range options {
-		o(top)
-	}
 	return top
 }
 
@@ -95,13 +88,8 @@ func (t *Topic[T]) Publish(value ...T) uint64 {
 // ErrUnknownTopicID is returned.
 //
 // If there is no new data, Receive() blocks until threre is new data or the
-// topic is closed or the given context is canceled. The same happens with id 0,
-// when there is no data at all in the topic.
-//
-// If the topic is already closed or the context is canceled, Receive() is
-// always unblocking. On exiting it returns the values as before. When the id
-// equal or higher to the highest id, it returns an error with the method
-// Closing().
+// given channel is done. The same happens with id 0, when there is no data at
+// all in the topic.
 //
 // If the data is available, Receive() returns in O(n) where n is the number of
 // values in the topic since the given id.
@@ -114,26 +102,12 @@ func (t *Topic[T]) Receive(ctx context.Context, id uint64) (uint64, []T, error) 
 		c := t.signal
 		t.mu.RUnlock()
 
-		var err error
 		select {
 		case <-c:
 			return t.Receive(ctx, id)
-		case <-t.closed:
-			err = closingError{}
 		case <-ctx.Done():
-			err = ctx.Err()
+			return 0, nil, ctx.Err()
 		}
-
-		// In very rare cases, new data could be added to the topic at the same
-		// time as the topic was closed. If that happens, it is pseudo random,
-		// which select-case the golang runtime chooses. To always return all
-		// data, we have to check for new data here.
-		if t.LastID() > id {
-			return t.Receive(ctx, id)
-		}
-
-		// The topic or the condext is closed.
-		return id, nil, err
 	}
 
 	defer t.mu.RUnlock()

@@ -9,14 +9,14 @@ import (
 )
 
 func ExampleTopic() {
-	closed := make(chan struct{})
-	top := topic.New(topic.WithClosed[string](closed))
+	ctx, shutdown := context.WithCancel(context.Background())
+	top := topic.New[string]()
 
 	// Write the messages v1, v2 and v3 in a different goroutine.
 	go func() {
 		top.Publish("v1")
 		top.Publish("v2", "v3")
-		close(closed)
+		shutdown()
 	}()
 
 	// Receive the two messages and print all values.
@@ -24,13 +24,10 @@ func ExampleTopic() {
 	var values []string
 	var err error
 	for {
-		id, values, err = top.Receive(context.Background(), id)
+		id, values, err = top.Receive(ctx, id)
 		if err != nil {
-			var closing interface {
-				Closing()
-			}
-			if errors.As(err, &closing) {
-				// topic was closed
+			if errors.Is(err, context.Canceled) {
+				// shutdown was called.
 				return
 			}
 

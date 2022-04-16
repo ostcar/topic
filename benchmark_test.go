@@ -9,16 +9,17 @@ import (
 )
 
 func benchmarkPublishWithXReceivers(count int, b *testing.B) {
-	closed := make(chan struct{})
-	defer close(closed)
-	top := topic.New(topic.WithClosed[string](closed))
+	ctx, shutdown := context.WithCancel(context.Background())
+	defer shutdown()
+
+	top := topic.New[string]()
 	for i := 0; i < count; i++ {
-		// Starts a receiver that listens to the topic until the topic is closed.
+		// Starts a receiver that listens to the topic until shutdown is called.
 		go func() {
 			var id uint64
 			var values []string
 			for {
-				id, values, _ = top.Receive(context.Background(), id)
+				id, values, _ = top.Receive(ctx, id)
 				if len(values) == 0 {
 					return
 				}

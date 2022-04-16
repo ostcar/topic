@@ -99,14 +99,6 @@ func TestPrune(t *testing.T) {
 			values("v3", "v4"),
 		},
 		{
-			"Prune on empty topic",
-			func(top *topic.Topic[string]) time.Time {
-				return time.Now()
-			},
-			0,
-			values(),
-		},
-		{
 			"Prune on topic with one element",
 			func(top *topic.Topic[string]) time.Time {
 				top.Publish("v1")
@@ -127,26 +119,36 @@ func TestPrune(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			closed := make(chan struct{})
-			close(closed)
-			top := topic.New(topic.WithClosed[string](closed))
+			top := topic.New[string]()
 			pruneTime := tt.f(top)
 
 			top.Prune(pruneTime)
 
 			_, got, err := top.Receive(context.Background(), 0)
 			if err != nil {
-				var closing interface {
-					Closing()
-				}
-				if !errors.As(err, &closing) {
-					t.Errorf("Receive() returned an unexpected error %v", err)
-				}
+				t.Fatalf("Receive(): %v", err)
 			}
+
 			if !cmpSlice(got, tt.expect) {
 				t.Errorf("Got %v, want %v", got, tt.expect)
 			}
 		})
+	}
+}
+
+func TestPruneEmptyTopic(t *testing.T) {
+	top := topic.New[string]()
+
+	top.Prune(time.Now())
+
+	top.Publish("foo")
+	_, got, err := top.Receive(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("Receive(): %v", err)
+	}
+
+	if !cmpSlice(got, []string{"foo"}) {
+		t.Errorf("Got %v, expect [foo]", got)
 	}
 }
 
@@ -252,47 +254,6 @@ func TestReceiveBlocking(t *testing.T) {
 	}
 }
 
-func TestBlockUntilClose(t *testing.T) {
-	// Tests, that Receive() unblocks, when the topic is closed.
-	closed := make(chan struct{})
-	top := topic.New(topic.WithClosed[string](closed))
-
-	// Send values as soon as Receive() returnes.
-	received := make(chan []string)
-	go func() {
-		_, got, err := top.Receive(context.Background(), 0)
-		var closing interface {
-			Closing()
-		}
-		if !errors.As(err, &closing) {
-			t.Errorf("Receive() returned an unexpected error %v", err)
-		}
-		received <- got
-	}()
-
-	// Receive() should not return before the timer.
-	timer := time.NewTimer(time.Millisecond)
-	defer timer.Stop()
-	select {
-	case <-received:
-		t.Errorf("Receive() returned before the topic was closed.")
-	case <-timer.C:
-		// Close the topic after some time.
-		close(closed)
-	}
-
-	// Receive should return after the topic was closed.
-	timer.Reset(100 * time.Millisecond)
-	select {
-	case got := <-received:
-		if !cmpSlice(got, values()) {
-			t.Errorf("Receive() returned %v, expected []", got)
-		}
-	case <-timer.C:
-		t.Errorf("Receive() blocked for emore then 100 Milliseconds, expected to unblock after topic is closed.")
-	}
-}
-
 func TestBlockUntilContexDone(t *testing.T) {
 	// Tests, that Receive() unblocks, when the context is canceled
 	top := topic.New[string]()
@@ -368,50 +329,6 @@ func TestBlockOnHighestID(t *testing.T) {
 	}
 }
 
-func TestReceiveOnClosedTopic(t *testing.T) {
-	// Test, that a Receive()-call on a already closed topic returnes
-	// immediately with all values.
-	closed := make(chan struct{})
-	top := topic.New(topic.WithClosed[string](closed))
-	top.Publish("v1")
-	highestID := top.Publish("v2")
-	close(closed)
-
-	// When the topic is closed, Receive(0) should still return its data.
-	_, got, err := top.Receive(context.Background(), 0)
-	if err != nil {
-		t.Errorf("Receive() returned the unexpected error %v", err)
-	}
-	if !cmpSlice(got, values("v1", "v2")) {
-		t.Errorf("Receive() returned %v, expected [v1 v2]", got)
-	}
-
-	// Send values as soon as Receive() returnes.
-	received := make(chan []string)
-	go func() {
-		_, got, err := top.Receive(context.Background(), highestID+100)
-		var closing interface {
-			Closing()
-		}
-		if !errors.As(err, &closing) {
-			t.Errorf("Receive() returned the unexpected error %v", err)
-		}
-		received <- got
-	}()
-
-	// Receive() should return immediately.
-	timer := time.NewTimer(time.Millisecond)
-	defer timer.Stop()
-	select {
-	case got := <-received:
-		if got != nil {
-			t.Errorf("Receive() returned %v, expected nil", got)
-		}
-	case <-timer.C:
-		t.Errorf("Receive() blocked. Expect it to return immediately when the topic is closed.")
-	}
-}
-
 func TestReceiveOnCanceledChannel(t *testing.T) {
 	top := topic.New[string]()
 	top.Publish("v1")
@@ -447,58 +364,8 @@ func TestReceiveOnCanceledChannel(t *testing.T) {
 			t.Errorf("Receive() returned %v, expected nil", got)
 		}
 	case <-timer.C:
-		t.Errorf("Receive() blocked. Expect it to return immediately when the topic is closed.")
+		t.Errorf("Receive() blocked. Expect it to return immediately after context is done.")
 	}
-}
-
-func TestWithStartID(t *testing.T) {
-	top := topic.New(topic.WithStartID[string](100))
-
-	t.Run("LastID", func(t *testing.T) {
-		if top.LastID() != 100 {
-			t.Errorf("LastID returned %d, expected 100", top.LastID())
-		}
-	})
-
-	t.Run("Receive", func(t *testing.T) {
-		id, value, err := top.Receive(context.Background(), 0)
-
-		if err != nil {
-			t.Errorf("Receive returned err %v", err)
-		}
-
-		if id != 100 {
-			t.Errorf("Receive returned id %d, expected 100", id)
-		}
-
-		if !cmpSlice(value, []string{}) {
-			t.Errorf("Receive returned values %v, expected no data", value)
-		}
-	})
-
-	t.Run("Publish", func(t *testing.T) {
-		id := top.Publish("value")
-
-		if id != 101 {
-			t.Errorf("Publish returned id %d, expected 101", id)
-		}
-
-		_, got, err := top.Receive(context.Background(), 0)
-		if err != nil {
-			t.Errorf("Reciece(0) returned error %v", err)
-		}
-		if !cmpSlice(got, []string{"value"}) {
-			t.Errorf("Receive(0) returned %v, expected [value]", got)
-		}
-
-		_, got, err = top.Receive(context.Background(), 100)
-		if err != nil {
-			t.Errorf("Reciece(100) returned error %v", err)
-		}
-		if !cmpSlice(got, []string{"value"}) {
-			t.Errorf("Receive returned %v, expected [value]", got)
-		}
-	})
 }
 
 func TestTopicWithStruct(t *testing.T) {

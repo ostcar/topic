@@ -33,14 +33,6 @@ To create a new topic use the topic.New() constructor:
 
     top := topic.New[string]()
 
-Optionally the topic can be initialized with a close-channel. When the channel
-is closed, receivers know when to finish reading:
-
-    closed := make(chan struct{})
-    top := topic.New(topic.WithClosed[string](closed))
-    ...
-    close(closed)
-
 
 Publish messages
 
@@ -81,36 +73,26 @@ after the id was created.
 When there are no new values in the topic, then the Receive()-call blocks until
 there are new values. To add a timeout to the call, the context can be used:
 
-    ctx, close := context.WithTimeout(context.Background(), 10*time.Second)
-    defer close()
+    ctx, cencel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cencel()
     id, values, err = top.Receive(ctx, id)
 
 If there are no new values before the context is canceled, the topic returns
 with the error `context.DeadlineExceeded`.
 
-A closed topic first returnes all its data. When there is no new data, the topic
-returnes with an error, that has the method `Closing()`.
-
 
 The usual pattern to subscibe to a topic is:
+
+    ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+    defer cancel()
 
     var id uint64
     var values []string
     var err error
-    ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-    defer cancel()
-
     for {
         id, values, err = top.Receive(ctx, id)
         if err != nil {
-            var closing interface {
-                Closing()
-            }
-            if errors.As(err, &closing) {
-                // The topic was closed
-                break
-            }
-            if errors.Is(err, context.DeadlineExceeded) {
+            if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
                 // Timeout
                 break
             }
@@ -119,8 +101,7 @@ The usual pattern to subscibe to a topic is:
         // Process values
     }
 
-The loop will process all values published by the topic for one minute. If the
-topic is closed, then the loop will exit early.
+The loop will process all values published by the topic for one minute.
 
 
 Get Last ID
@@ -133,14 +114,13 @@ LastID() can be used:
     id, values, err = top.Receive(context.Background(), id)
 
 The return value of LastID() is the highest id in the topic. So a Receive() call
-on top.LastID() will only return data, that were published after the call.
+on top.LastID() will only return data, that was published after the call.
 
 A pattern to receive only new data is:
 
     id := top.LastID()
     var values []string
     var err error
-
     for {
         id, values, err = top.Receive(context.Background(), id)
         if err != nil {
@@ -158,11 +138,11 @@ This can be accomplished with the Prune() method:
 
     top.Prune(10*time.Minute)
 
-This call will remove all values in the topic, that are older then ten minutes.
+This call will remove all values in the topic that are older then ten minutes.
 
 Make sure, that all receivers have read the values before they are pruned.
 
 If a Receive()-call tries to receive pruned values, it will return with the
-error topic.ErrUnknownID.
+error `topic.ErrUnknownID`.
 */
 package topic
