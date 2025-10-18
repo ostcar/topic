@@ -6,15 +6,15 @@ import (
 	"time"
 )
 
-// Topic is a datastructure that holds a set values. Values can be published to
+// Topic is a datastructure that holds a set of values. Values can be published to
 // a topic. Each time a list of values is published, a new id is created. It is
-// possible to receive all values at once or the values that published after a
-// specivic id.
+// possible to receive all values at once or the values that were published after a
+// specific id.
 //
 // A Topic has to be created with the topic.New() function. For example
 // topic.New[string]().
 //
-// A Topic is save for concourent use.
+// A Topic is safe for concurrent use.
 //
 // The type of value is restricted to be a comparable. This is required, so the
 // topic.Receive function can return a list of unique values. This restriction
@@ -24,7 +24,7 @@ type Topic[T comparable] struct {
 	mu sync.RWMutex
 
 	// The topic is implemented by a linked list and an index from each id to
-	// the node. Therefore nodes get be added, retrieved and deleted from the
+	// the node. Therefore nodes can be added, retrieved and deleted from the
 	// top in constant time.
 	head  *node[T]
 	tail  *node[T]
@@ -71,7 +71,7 @@ func (t *Topic[T]) Publish(value ...T) uint64 {
 	t.index[newNode.id] = newNode
 
 	// Closes the signal channel to signal all Receive()-calls. To overwrite the
-	// value afterwars is not a race condition. Since the go-implementation of a
+	// value afterwards is not a race condition. Since the go-implementation of a
 	// channel is a pointer-type, a new object is created, while the
 	// Receive()-calls keep listening on the old object.
 	close(t.signal)
@@ -81,13 +81,13 @@ func (t *Topic[T]) Publish(value ...T) uint64 {
 }
 
 // Receive returns a slice of unique values from the topic. If id is 0, all
-// values are returned, else, all values that where inserted after the id are
+// values are returned, else, all values that were inserted after the id are
 // returned.
 //
-// If the id is lower then the lowest id in the topic, an error of type
-// ErrUnknownTopicID is returned.
+// If the id is lower than the lowest id in the topic, an error of type
+// UnknownIDError is returned.
 //
-// If there is no new data, Receive() blocks until threre is new data or the
+// If there is no new data, Receive() blocks until there is new data or the
 // given channel is done. The same happens with id 0, when there is no data at
 // all in the topic.
 //
@@ -137,10 +137,10 @@ func (t *Topic[T]) LastID() uint64 {
 	return t.tail.id
 }
 
-// Prune removes entries from the topic that are older then the given time.
+// Prune removes entries from the topic that are older than the given time.
 //
 // Prune has a complexity of O(n) where n is the count of all nodes that are
-// older then the given time.
+// older than the given time.
 func (t *Topic[T]) Prune(until time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -149,8 +149,8 @@ func (t *Topic[T]) Prune(until time.Time) {
 		return
 	}
 
-	// Delete all nodes from the index, that are older then the given time.
-	// After the loop, n is the oldes index, that is still in the index.
+	// Delete all nodes from the index, that are older than the given time.
+	// After the loop, n is the oldest index, that is still in the index.
 	n := t.head
 	for ; n.t.Before(until) && n.next != nil; n = n.next {
 		delete(t.index, n.id)
