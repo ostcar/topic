@@ -170,12 +170,12 @@ type node[T comparable] struct {
 // unique. If there are no values, an empty slice (not nil) is returned.
 func runNode[T comparable](n *node[T]) []T {
 	var values []T
-	seen := make(map[T]bool)
+	seen := make(map[T]struct{})
 	for ; n != nil; n = n.next {
 		for _, v := range n.value {
-			if !seen[v] {
+			if _, ok := seen[v]; !ok {
 				values = append(values, v)
-				seen[v] = true
+				seen[v] = struct{}{}
 			}
 		}
 	}
