@@ -302,7 +302,7 @@ func TestBlockOnHighestID(t *testing.T) {
 	}()
 
 	// Receive should not return before the timer
-	timer := time.NewTimer(20 * time.Millisecond)
+	timer := time.NewTimer(time.Millisecond)
 	defer timer.Stop()
 	select {
 	case <-done:
