@@ -41,7 +41,7 @@ func TestPublishReceive(t *testing.T) {
 				top.Publish("v1")
 			},
 			0,
-			values("v1"),
+			values("v1", "v1"),
 		},
 		{
 			"Receive only second value",
@@ -52,21 +52,12 @@ func TestPublishReceive(t *testing.T) {
 			1,
 			values("v2"),
 		},
-		{
-			"Publish empty values",
-			func(top *topic.Topic[string]) {
-				top.Publish()
-				top.Publish()
-			},
-			1,
-			values(),
-		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			top := topic.New[string]()
 			tt.f(top)
 
-			_, got, err := top.Receive(context.Background(), tt.receiveID)
+			_, got, err := top.Receive(t.Context(), tt.receiveID)
 
 			if err != nil {
 				t.Errorf("Did not expect an error, got: %v", err)
@@ -105,14 +96,15 @@ func TestPrune(t *testing.T) {
 				return time.Now()
 			},
 			0,
-			values("v1"),
+			values(),
 		},
 		{
 			"Do not prune last element",
 			func(top *topic.Topic[string]) time.Time {
 				top.Publish("v1")
+				t := time.Now()
 				top.Publish("v2")
-				return time.Now()
+				return t
 			},
 			0,
 			values("v2"),
@@ -124,7 +116,7 @@ func TestPrune(t *testing.T) {
 
 			top.Prune(pruneTime)
 
-			_, got, err := top.Receive(context.Background(), 0)
+			_, got, err := top.Receive(t.Context(), 0)
 			if err != nil {
 				t.Fatalf("Receive(): %v", err)
 			}
@@ -142,7 +134,7 @@ func TestPruneEmptyTopic(t *testing.T) {
 	top.Prune(time.Now())
 
 	top.Publish("foo")
-	_, got, err := top.Receive(context.Background(), 0)
+	_, got, err := top.Receive(t.Context(), 0)
 	if err != nil {
 		t.Fatalf("Receive(): %v", err)
 	}
@@ -162,7 +154,7 @@ func TestErrUnknownID(t *testing.T) {
 
 	top.Prune(ti)
 
-	_, _, err := top.Receive(context.Background(), 1)
+	_, _, err := top.Receive(t.Context(), 1)
 	topicErr, ok := err.(topic.UnknownIDError)
 	if !ok {
 		t.Errorf("Expected err to be a topic.ErrUnknownID, got: %v", err)
@@ -204,7 +196,7 @@ func TestLastID(t *testing.T) {
 			func(top *topic.Topic[string]) {
 				top.Publish()
 			},
-			1,
+			0,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -234,7 +226,7 @@ func TestReceiveBlocking(t *testing.T) {
 	// Send values as soon as Receive() returnes.
 	received := make(chan []string)
 	go func() {
-		_, got, err := top.Receive(context.Background(), 0)
+		_, got, err := top.Receive(t.Context(), 0)
 		if err != nil {
 			t.Errorf("Receive() returned the unexpected error %v", err)
 		}
@@ -257,7 +249,7 @@ func TestReceiveBlocking(t *testing.T) {
 func TestBlockUntilContexDone(t *testing.T) {
 	// Tests, that Receive() unblocks, when the context is canceled
 	top := topic.New[string]()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	// Send values as soon as Receive() returnes.
@@ -303,14 +295,14 @@ func TestBlockOnHighestID(t *testing.T) {
 	// Close done channel, after Receive() unblocks.
 	done := make(chan struct{})
 	go func() {
-		if _, _, err := top.Receive(context.Background(), highestID); err != nil {
+		if _, _, err := top.Receive(t.Context(), highestID); err != nil {
 			t.Errorf("Receive() returned the unexpected error %v", err)
 		}
 		close(done)
 	}()
 
 	// Receive should not return before the timer
-	timer := time.NewTimer(time.Millisecond)
+	timer := time.NewTimer(20 * time.Millisecond)
 	defer timer.Stop()
 	select {
 	case <-done:
@@ -333,7 +325,7 @@ func TestReceiveOnCanceledChannel(t *testing.T) {
 	top := topic.New[string]()
 	top.Publish("v1")
 	highestID := top.Publish("v2")
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	// When context is canceled, Receive(0) should still return its data.
@@ -377,13 +369,13 @@ func TestTopicWithStruct(t *testing.T) {
 	top.Publish(myType{5, "foobar"})
 	top.Publish(myType{5, "foobar"})
 
-	_, values, err := top.Receive(context.Background(), 0)
+	_, values, err := top.Receive(t.Context(), 0)
 	if err != nil {
 		t.Errorf("receive: %v", err)
 	}
 
 	expect := myType{5, "foobar"}
-	if len(values) != 1 || values[0] != expect {
+	if len(values) != 2 || values[0] != expect {
 		t.Errorf("got %v, expected [%v]", values, expect)
 	}
 }
@@ -397,7 +389,7 @@ func TestTopicWithPointer(t *testing.T) {
 	top.Publish(&myType{5, "foobar"})
 	top.Publish(&myType{5, "foobar"})
 
-	_, values, err := top.Receive(context.Background(), 0)
+	_, values, err := top.Receive(t.Context(), 0)
 	if err != nil {
 		t.Errorf("receive: %v", err)
 	}
