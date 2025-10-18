@@ -1,148 +1,137 @@
 /*
-Package topic is a inmemory pubsub system where new values are pulled instead of
-beeing pushed.
+Package topic is an in-memory pubsub system where new values are pulled instead
+of being pushed.
+
+It solves the problem, that you want to publish data to many goroutines. The
+standard way in go uses channels to push values to the readers. But channels
+have the problems, that either the goroutine sending the data has to wait for
+the reader or has to discard messages,if the reader is too slow. A buffered
+channel can help to delay the problem, but eventually the buffer could be full.
 
 The idea of pulling updates is inspired by Kafka or Redis-Streams. A subscriber
 does not have to register or unsubscribe to a topic and can take as much time as
 it needs to process the messages. Therefore, the system is less error prone.
 
-In common pubsub systems, the publisher pushes values to the receivers. The
-problem with this pattern is, that the publisher could send messages faster,
-then a slow receivers can process them. A buffer can help to delay the problem,
-but eventually the buffer could be full. If this happens, there are two options.
-Either the publisher has to wait on the slowest receiver or a slow receiver has
-to drop messages. In the first case, the system is only as fast, as the slowest
-receiver. On the second case, it is not guaranteed, that a receiver gets all
-messages.
-
-A third pattern is, that the publisher does not push the values, but the
-receivers has to pull them. The publisher can save values without waiting on
+In a pulling messaging system, the publisher does not push the values, but the
+receivers have to pull them. The publisher can save values without waiting on
 slow receivers. A receiver has all the time it needs to process messages and can
-pull again as soon as the work is done. This packet implements the third
-pattern.
+pull again as soon as the work is done.
 
 Another benefit of this pattern is, that a receiver does not have to register on
 the pubsub system. Since the publisher does not send the messages, it does not
-have to know how many receivers there are. Therefore there a no register or
+have to know how many receivers there are. Therefore there are no register or
 unregister methods in this package.
 
-
-Create new topic
+# Create new topic
 
 To create a new topic use the topic.New() constructor:
 
-    top := topic.New[string]()
+	top := topic.New[string]()
 
-
-Publish messages
+# Publish messages
 
 Messages can be published with the Publish()-method:
 
-    top.Publish("some value")
+	top.Publish("some value")
 
-More then one message can be published at once:
+More than one message can be published at once:
 
-    top.Publish("some value", "other value")
+	top.Publish("some value", "other value")
 
 Internally, the topic creates a new id that can be used to receive newer values.
 The Publish()-method returns this id. In most cases, the returned id can be
 ignored.
 
-
-Receive messages
+# Receive messages
 
 Messages can be received with the Receive()-method:
 
-    id, values, err := top.Receive(context.Background(), 0)
+	id, values, err := top.Receive(context.Background(), 0)
 
-The first returned value is the id creates by the last Publish()-call. The
-second value is a slice of all all message that where published before. Each
-value in the returned slice is unique.
+The first returned value is the id created by the last Publish()-call. The
+second value is a slice of all messages that were published before.
 
 To receive newer values, Receive() can be called again with the id from the last
 call:
 
-    id, values, err := top.Receive(context.Background(), 0)
-    ...
-    id, values, err = top.Receive(context.Background(), id)
+	id, values, err := top.Receive(context.Background(), 0)
+	...
+	id, values, err = top.Receive(context.Background(), id)
 
-When the given id is zero, then all messages are returned. If the id is greater
-then zero, then only messages are returned, that where published by the topic
+If the given id is zero, then all messages are returned. If the id is greater
+than zero, then only messages are returned that were published by the topic
 after the id was created.
 
 When there are no new values in the topic, then the Receive()-call blocks until
 there are new values. To add a timeout to the call, the context can be used:
 
-    ctx, cencel := context.WithTimeout(context.Background(), 10*time.Second)
-    defer cencel()
-    id, values, err = top.Receive(ctx, id)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	id, values, err = top.Receive(ctx, id)
 
-If there are no new values before the context is canceled, the topic returns
-with the error `context.DeadlineExceeded`.
+If there are no new values before the context is canceled, the topic returns the error
+of the context. For example `context.DeadlineExceeded` or `context.Canceled`.
 
+The usual pattern to subscribe to a topic is:
 
-The usual pattern to subscibe to a topic is:
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 
-    ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-    defer cancel()
-
-    var id uint64
-    var values []string
-    var err error
-    for {
-        id, values, err = top.Receive(ctx, id)
-        if err != nil {
-            if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-                // Timeout
-                break
-            }
-            // Handle other errors
-        }
-        // Process values
-    }
+	var id uint64
+	var values []string
+	var err error
+	for {
+	    id, values, err = top.Receive(ctx, id)
+	    if err != nil {
+	        if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+	            // Timeout
+	            break
+	        }
+	        // Handle other errors
+	    }
+	    // Process values
+	}
 
 The loop will process all values published by the topic for one minute.
 
-
-Get Last ID
+# Get Last ID
 
 The example above will process all messages in the topic. If only messages
-should be processed, that where published after the loop starts, the method
+should be processed that were published after the loop starts, the method
 LastID() can be used:
 
-    id := top.LastID()
-    id, values, err = top.Receive(context.Background(), id)
+	id := top.LastID()
+	id, values, err = top.Receive(context.Background(), id)
 
 The return value of LastID() is the highest id in the topic. So a Receive() call
-on top.LastID() will only return data, that was published after the call.
+on top.LastID() will only return data that was published after the call.
 
 A pattern to receive only new data is:
 
-    id := top.LastID()
-    var values []string
-    var err error
-    for {
-        id, values, err = top.Receive(context.Background(), id)
-        if err != nil {
-            // Handle error
-        }
-        // Process values
-    }
+	id := top.LastID()
+	var values []string
+	var err error
+	for {
+	    id, values, err = top.Receive(context.Background(), id)
+	    if err != nil {
+	        // Handle error
+	    }
+	    // Process values
+	}
 
+# Prune old values
 
-Prune old values
-
-For this pattern to work, the topic has to save all values that where ever
+For this pattern to work, the topic has to save all values that were ever
 published. To free some memory, old values can be deleted from time to time.
 This can be accomplished with the Prune() method:
 
-    top.Prune(10*time.Minute)
+	top.Prune(time.Now().Add(-10*time.Minute))
 
-This call will remove all values in the topic that are older then ten minutes.
+This call will remove all values in the topic that are older than ten minutes.
 
-Make sure, that all receivers have read the values before they are pruned.
+Make sure that all receivers have read the values before they are pruned.
 
 If a Receive()-call tries to receive pruned values, it will return with the
-error `topic.ErrUnknownID`.
+error `topic.UnknownIDError`.
 */
 package topic
