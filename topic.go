@@ -73,6 +73,9 @@ func (t *Topic[T]) Publish(value ...T) uint64 {
 // If there is no new data, Receive() blocks until there is new data or the
 // given channel is done. The same happens with id 0, when there is no data at
 // all in the topic.
+//
+// For performance reasons, this function returns the internal slice of the
+// topic. It is not allowed to manipulate the values.
 func (t *Topic[T]) Receive(ctx context.Context, id uint64) (uint64, []T, error) {
 	t.mu.RLock()
 
@@ -130,17 +133,13 @@ func (t *Topic[T]) Prune(until time.Time) {
 	}
 
 	if n >= len(t.data) {
-		t.data = t.data[:0]
-		t.insertTime = t.insertTime[:0]
+		t.data = nil
+		t.insertTime = nil
 		t.offset += uint64(n)
 		return
 	}
 
-	copy(t.data, t.data[n:])
-	copy(t.insertTime, t.insertTime[n:])
-
-	t.data = t.data[:len(t.data)-n]
-	t.insertTime = t.insertTime[:len(t.insertTime)-n]
-
+	t.data = slices.Clone(t.data[n:])
+	t.insertTime = slices.Clone(t.insertTime[n:])
 	t.offset += uint64(n)
 }

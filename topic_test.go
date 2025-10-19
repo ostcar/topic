@@ -116,10 +116,10 @@ func TestPrune(t *testing.T) {
 
 			top.Prune(pruneTime)
 
-			_, got, err := top.Receive(t.Context(), 0)
-			if err != nil {
-				t.Fatalf("Receive(): %v", err)
-			}
+			ctxCanceled, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			_, got, _ := top.Receive(ctxCanceled, 0)
 
 			if !cmpSlice(got, tt.expect) {
 				t.Errorf("Got %v, want %v", got, tt.expect)
@@ -141,6 +141,24 @@ func TestPruneEmptyTopic(t *testing.T) {
 
 	if !cmpSlice(got, []string{"foo"}) {
 		t.Errorf("Got %v, expect [foo]", got)
+	}
+}
+
+func TestPruneUsedValue(t *testing.T) {
+	top := topic.New[string]()
+	top.Publish("val1")
+	top.Publish("val2")
+	top.Publish("val3")
+	ti := time.Now()
+	_, data, err := top.Receive(t.Context(), 0)
+	if err != nil {
+		t.Fatalf("Receive(): %v", err)
+	}
+	top.Publish("val4")
+	top.Prune(ti)
+
+	if data[0] != "val1" {
+		t.Errorf("Received value changed to %s, expected `val1`", data[0])
 	}
 }
 
