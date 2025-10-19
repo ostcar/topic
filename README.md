@@ -3,8 +3,8 @@
 [![Actions Status](https://github.com/ostcar/topic/workflows/Topic/badge.svg)](https://github.com/ostcar/topic/actions)
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/ostcar/topic)](https://pkg.go.dev/github.com/ostcar/topic)
 
- Package topic is an in-process pubsub system where new
-values can be pulled instead of being pushed.
+Package topic is an in-process pubsub system where new values can be pulled
+instead of being pushed.
 
 The idea of pulling updates is inspired by [Kafka](https://kafka.apache.org/) or
 [Redis-Streams](https://redis.io/topics/streams-intro). A subscriber does not

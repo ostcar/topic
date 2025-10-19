@@ -1,25 +1,21 @@
 /*
-Package topic is an in-memory pubsub system where new values are pulled instead of
-being pushed.
+Package topic is an in-memory pubsub system where new values are pulled instead
+of being pushed.
+
+It solves the problem, that you want to publish data to many goroutines. The
+standard way in go uses channels to push values to the readers. But channels
+have the problems, that either the goroutine sending the data has to wait for
+the reader or has to discard messages,if the reader is too slow. A buffered
+channel can help to delay the problem, but eventually the buffer could be full.
 
 The idea of pulling updates is inspired by Kafka or Redis-Streams. A subscriber
 does not have to register or unsubscribe to a topic and can take as much time as
 it needs to process the messages. Therefore, the system is less error prone.
 
-In common pubsub systems, the publisher pushes values to the receivers. The
-problem with this pattern is, that the publisher could send messages faster
-than a slow receiver can process them. A buffer can help to delay the problem,
-but eventually the buffer could be full. If this happens, there are two options.
-Either the publisher has to wait on the slowest receiver or a slow receiver has
-to drop messages. In the first case, the system is only as fast as the slowest
-receiver. In the second case, it is not guaranteed that a receiver gets all
-messages.
-
-A third pattern is, that the publisher does not push the values, but the
+In a pulling messaging system, the publisher does not push the values, but the
 receivers have to pull them. The publisher can save values without waiting on
 slow receivers. A receiver has all the time it needs to process messages and can
-pull again as soon as the work is done. This package implements the third
-pattern.
+pull again as soon as the work is done.
 
 Another benefit of this pattern is, that a receiver does not have to register on
 the pubsub system. Since the publisher does not send the messages, it does not
@@ -53,8 +49,7 @@ Messages can be received with the Receive()-method:
 	id, values, err := top.Receive(context.Background(), 0)
 
 The first returned value is the id created by the last Publish()-call. The
-second value is a slice of all messages that were published before. Each
-value in the returned slice is unique.
+second value is a slice of all messages that were published before.
 
 To receive newer values, Receive() can be called again with the id from the last
 call:
@@ -63,7 +58,7 @@ call:
 	...
 	id, values, err = top.Receive(context.Background(), id)
 
-When the given id is zero, then all messages are returned. If the id is greater
+If the given id is zero, then all messages are returned. If the id is greater
 than zero, then only messages are returned that were published by the topic
 after the id was created.
 
@@ -74,8 +69,8 @@ there are new values. To add a timeout to the call, the context can be used:
 	defer cancel()
 	id, values, err = top.Receive(ctx, id)
 
-If there are no new values before the context is canceled, the topic returns
-with the error `context.DeadlineExceeded`.
+If there are no new values before the context is canceled, the topic returns the error
+of the context. For example `context.DeadlineExceeded` or `context.Canceled`.
 
 The usual pattern to subscribe to a topic is:
 
@@ -130,13 +125,13 @@ For this pattern to work, the topic has to save all values that were ever
 published. To free some memory, old values can be deleted from time to time.
 This can be accomplished with the Prune() method:
 
-	top.Prune(10*time.Minute)
+	top.Prune(time.Now().Add(-10*time.Minute))
 
 This call will remove all values in the topic that are older than ten minutes.
 
 Make sure that all receivers have read the values before they are pruned.
 
 If a Receive()-call tries to receive pruned values, it will return with the
-error `topic.ErrUnknownID`.
+error `topic.UnknownIDError`.
 */
 package topic

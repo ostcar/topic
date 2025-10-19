@@ -9,11 +9,10 @@ import (
 )
 
 func benchmarkPublishWithXReceivers(count int, b *testing.B) {
-	ctx, shutdown := context.WithCancel(context.Background())
-	defer shutdown()
+	ctx := b.Context()
 
 	top := topic.New[string]()
-	for i := 0; i < count; i++ {
+	for range count {
 		// Starts a receiver that listens to the topic until shutdown is called.
 		go func() {
 			var id uint64
@@ -29,7 +28,7 @@ func benchmarkPublishWithXReceivers(count int, b *testing.B) {
 
 	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		top.Publish("value")
 	}
 }
@@ -42,13 +41,13 @@ func BenchmarkPublishWithXReceivers10000(b *testing.B) { benchmarkPublishWithXRe
 
 func benchmarkRetrieveBigTopic(count int, b *testing.B) {
 	top := topic.New[string]()
-	for i := 0; i < count; i++ {
+	for i := range count {
 		top.Publish("value" + strconv.Itoa(i))
 	}
 	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
-		top.Receive(context.Background(), 0)
+	for b.Loop() {
+		top.Receive(b.Context(), 0)
 	}
 }
 
@@ -61,7 +60,7 @@ func BenchmarkRetrieveBigTopic100000(b *testing.B) { benchmarkRetrieveBigTopic(1
 
 func benchmarkRetrieveLastBigTopic(count int, b *testing.B) {
 	top := topic.New[string]()
-	for i := 0; i < count; i++ {
+	for i := range count {
 		top.Publish("value" + strconv.Itoa(i))
 	}
 	id := top.LastID()
@@ -69,7 +68,7 @@ func benchmarkRetrieveLastBigTopic(count int, b *testing.B) {
 
 	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		top.Receive(ctx, id-1)
 	}
 }

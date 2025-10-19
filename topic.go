@@ -2,33 +2,26 @@ package topic
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 )
 
-// Topic is a datastructure that holds a set of values. Values can be published to
-// a topic. Each time a list of values is published, a new id is created. It is
-// possible to receive all values at once or the values that were published after a
-// specific id.
+// Topic is a datastructure that holds a list of values. To add a value to a
+// topic is called publishing that value. Each time, a list of values is
+// published, a new id is created. It is possible to receive all values from a
+// topic at once or the values that were published after a specific id.
 //
-// A Topic has to be created with the topic.New() function. For example
+// A Topic has to be created with `topic.New()`. For example
 // topic.New[string]().
 //
 // A Topic is safe for concurrent use.
-//
-// The type of value is restricted to be a comparable. This is required, so the
-// topic.Receive function can return a list of unique values. This restriction
-// could be removed in a future version of go, if it will be possible to check
-// the type of a generic value.
-type Topic[T comparable] struct {
+type Topic[T any] struct {
 	mu sync.RWMutex
 
-	// The topic is implemented by a linked list and an index from each id to
-	// the node. Therefore nodes can be added, retrieved and deleted from the
-	// top in constant time.
-	head  *node[T]
-	tail  *node[T]
-	index map[uint64]*node[T]
+	data       []T
+	insertTime []time.Time
+	offset     uint64
 
 	// The signal channel is closed when data is published by the topic to
 	// signal all listening Receive()-calls. After closing the channel, a new
@@ -38,37 +31,28 @@ type Topic[T comparable] struct {
 }
 
 // New creates a new topic.
-func New[T comparable]() *Topic[T] {
+func New[T any]() *Topic[T] {
 	top := &Topic[T]{
 		signal: make(chan struct{}),
-		index:  make(map[uint64]*node[T]),
 	}
 
 	return top
 }
 
-// Publish adds a list of values to a topic. It creates a new id and returns
-// it. All waiting Receive()-calls are awakened.
-//
-// Publish() inserts the values in constant time.
+// Publish adds one or many values to a topic. It returns the new id. All
+// waiting Receive()-calls are awakened.
 func (t *Topic[T]) Publish(value ...T) uint64 {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	newNode := &node[T]{}
-	var id uint64
-	if t.head == nil {
-		t.head = newNode
-	} else {
-		id = t.tail.id
-		t.tail.next = newNode
-	}
-	t.tail = newNode
-	newNode.id = id + 1
-	newNode.t = time.Now()
-	newNode.value = value
+	t.data = append(t.data, value...)
 
-	t.index[newNode.id] = newNode
+	// time.Now() uses a syscall and therefore is slow (around 3500 ns).
+	now := time.Now()
+	t.insertTime = slices.Grow(t.insertTime, len(value))
+	for range len(value) {
+		t.insertTime = append(t.insertTime, now)
+	}
 
 	// Closes the signal channel to signal all Receive()-calls. To overwrite the
 	// value afterwards is not a race condition. Since the go-implementation of a
@@ -77,12 +61,11 @@ func (t *Topic[T]) Publish(value ...T) uint64 {
 	close(t.signal)
 	t.signal = make(chan struct{})
 
-	return newNode.id
+	return t.lastID()
 }
 
-// Receive returns a slice of unique values from the topic. If id is 0, all
-// values are returned, else, all values that were inserted after the id are
-// returned.
+// Receive returns all values from the topic. If id is 0, all values are
+// returned. Otherwise, all values that were inserted after the id are returned.
 //
 // If the id is lower than the lowest id in the topic, an error of type
 // UnknownIDError is returned.
@@ -90,15 +73,12 @@ func (t *Topic[T]) Publish(value ...T) uint64 {
 // If there is no new data, Receive() blocks until there is new data or the
 // given channel is done. The same happens with id 0, when there is no data at
 // all in the topic.
-//
-// If the data is available, Receive() returns in O(n) where n is the number of
-// values in the topic since the given id.
 func (t *Topic[T]) Receive(ctx context.Context, id uint64) (uint64, []T, error) {
 	t.mu.RLock()
 
 	// Request data, that is not in the topic yet. Block until the next
 	// Publish() call.
-	if t.tail == nil || id >= t.tail.id {
+	if t.data == nil || id >= t.lastID() {
 		c := t.signal
 		t.mu.RUnlock()
 
@@ -113,71 +93,54 @@ func (t *Topic[T]) Receive(ctx context.Context, id uint64) (uint64, []T, error) 
 	defer t.mu.RUnlock()
 
 	if id == 0 {
-		// Return all data.
-		return t.tail.id, runNode(t.head), nil
+		return t.lastID(), t.data, nil
 	}
 
-	n := t.index[id]
-	if n == nil {
-		return 0, nil, UnknownIDError{ID: id, FirstID: t.head.id}
+	if id < t.offset {
+		return 0, nil, UnknownIDError{ID: id, FirstID: t.offset + 1}
 	}
-	return t.tail.id, runNode(n.next), nil
+	return t.lastID(), t.data[id-t.offset:], nil
 }
 
 // LastID returns the last id of the topic. Returns 0 for an empty topic.
-//
-// LastID returns in constant time.
 func (t *Topic[T]) LastID() uint64 {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	if t.tail == nil {
-		return 0
-	}
-	return t.tail.id
+	return t.lastID()
+}
+
+func (t *Topic[T]) lastID() uint64 {
+	return uint64(len(t.data)) + t.offset
 }
 
 // Prune removes entries from the topic that are older than the given time.
-//
-// Prune has a complexity of O(n) where n is the count of all nodes that are
-// older than the given time.
 func (t *Topic[T]) Prune(until time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if t.head == nil {
+	if len(t.data) == 0 {
 		return
 	}
 
-	// Delete all nodes from the index, that are older than the given time.
-	// After the loop, n is the oldest index, that is still in the index.
-	n := t.head
-	for ; n.t.Before(until) && n.next != nil; n = n.next {
-		delete(t.index, n.id)
-	}
-	t.head = n
-}
+	n, _ := slices.BinarySearchFunc(t.insertTime, until, time.Time.Compare)
 
-// node implements a linked list.
-type node[T comparable] struct {
-	id    uint64
-	t     time.Time
-	next  *node[T]
-	value []T
-}
-
-// runNode returns all values from a node and the following nodes. Each value is
-// unique. If there are no values, an empty slice (not nil) is returned.
-func runNode[T comparable](n *node[T]) []T {
-	var values []T
-	seen := make(map[T]struct{})
-	for ; n != nil; n = n.next {
-		for _, v := range n.value {
-			if _, ok := seen[v]; !ok {
-				values = append(values, v)
-				seen[v] = struct{}{}
-			}
-		}
+	if n == 0 {
+		return
 	}
-	return values
+
+	if n >= len(t.data) {
+		t.data = t.data[:0]
+		t.insertTime = t.insertTime[:0]
+		t.offset += uint64(n)
+		return
+	}
+
+	copy(t.data, t.data[n:])
+	copy(t.insertTime, t.insertTime[n:])
+
+	t.data = t.data[:len(t.data)-n]
+	t.insertTime = t.insertTime[:len(t.insertTime)-n]
+
+	t.offset += uint64(n)
 }
