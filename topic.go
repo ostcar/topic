@@ -78,16 +78,17 @@ func (t *Topic[T]) Publish(value ...T) uint64 {
 // topic. It is not allowed to manipulate the values.
 func (t *Topic[T]) Receive(ctx context.Context, id uint64) (uint64, []T, error) {
 	t.mu.RLock()
+	lastIDWhenStarted := t.lastID()
 
 	// Request data, that is not in the topic yet. Block until the next
 	// Publish() call.
-	if t.data == nil || id >= t.lastID() {
+	if t.data == nil || id >= lastIDWhenStarted {
 		c := t.signal
 		t.mu.RUnlock()
 
 		select {
 		case <-c:
-			return t.Receive(ctx, id)
+			return t.Receive(ctx, lastIDWhenStarted)
 		case <-ctx.Done():
 			return 0, nil, ctx.Err()
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -66,6 +67,54 @@ func TestPublishReceive(t *testing.T) {
 				t.Errorf("Got %v, want %v", got, tt.expect)
 			}
 		})
+	}
+}
+
+func TestPublishCreatesIncreasingIDs(t *testing.T) {
+	top := topic.New[string]()
+
+	id1 := top.Publish("v1")
+	id2 := top.Publish("v2", "v3")
+	id3 := top.Publish("v4")
+
+	if !(id1 < id2 && id2 < id3) {
+		t.Errorf("Got ids %d %d %d, expected increasing", id1, id2, id3)
+	}
+}
+
+func TestPublishWithoutValues(t *testing.T) {
+	top := topic.New[string]()
+	top.Publish("v1")
+
+	id := top.Publish()
+
+	if id != 1 {
+		t.Errorf("Publish() without values returned %d, expected 1", id)
+	}
+
+	_, data, err := top.Receive(t.Context(), 0)
+	if err != nil {
+		t.Errorf("Receive() error: %v", err)
+	}
+	if len(data) != 1 {
+		t.Errorf("Expected 1 value, got %d", len(data))
+	}
+}
+
+func TestReceiveWithIDEqualLastID(t *testing.T) {
+	top := topic.New[string]()
+	top.Publish("v1")
+	lastID := top.Publish("v2")
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	defer cancel()
+
+	_, data, err := top.Receive(ctx, lastID)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("Expected context deadline exceeded, got %v", err)
+	}
+	if data != nil {
+		t.Errorf("Expected nil data, got %v", data)
 	}
 }
 
@@ -144,6 +193,25 @@ func TestPruneEmptyTopic(t *testing.T) {
 	}
 }
 
+func TestPruneAllElements(t *testing.T) {
+	top := topic.New[string]()
+	top.Publish("v1")
+	top.Publish("v2")
+
+	top.Prune(time.Now())
+
+	if lastID := top.LastID(); lastID != 2 {
+		t.Errorf("LastID() = %d, expected 2", lastID)
+	}
+
+	ctxCanceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, data, _ := top.Receive(ctxCanceled, 0)
+	if data != nil {
+		t.Errorf("Expected nil data after pruning all, got %v", data)
+	}
+}
+
 func TestPruneUsedValue(t *testing.T) {
 	top := topic.New[string]()
 	top.Publish("val1")
@@ -159,6 +227,63 @@ func TestPruneUsedValue(t *testing.T) {
 
 	if data[0] != "val1" {
 		t.Errorf("Received value changed to %s, expected `val1`", data[0])
+	}
+}
+
+func TestPruneWithPastTime(t *testing.T) {
+	top := topic.New[string]()
+
+	top.Publish("v1")
+	top.Publish("v2")
+
+	pastTime := time.Now().Add(-1 * time.Hour)
+	top.Prune(pastTime)
+
+	_, data, err := top.Receive(t.Context(), 0)
+	if err != nil {
+		t.Errorf("Receive() error: %v", err)
+	}
+	if len(data) != 2 {
+		t.Errorf("Expected 2 values after pruning past time, got %d", len(data))
+	}
+}
+
+func TestMultiplePrunes(t *testing.T) {
+	top := topic.New[string]()
+	top.Publish("v1")
+	top.Publish("v2")
+	t1 := time.Now()
+	top.Publish("v3")
+	t2 := time.Now()
+	top.Publish("v4")
+
+	top.Prune(t1)
+	top.Prune(t2)
+
+	_, data, err := top.Receive(t.Context(), 0)
+	if err != nil {
+		t.Errorf("Receive() error: %v", err)
+	}
+	if len(data) != 1 || data[0] != "v4" {
+		t.Errorf("After multiple prunes got %v, expected [v4]", data)
+	}
+}
+
+func TestReceiveWithExactOffsetAfterPrune(t *testing.T) {
+	top := topic.New[string]()
+	top.Publish("v1")
+	top.Publish("v2")
+	ti := time.Now()
+	top.Publish("v3")
+
+	top.Prune(ti)
+
+	_, data, err := top.Receive(t.Context(), 2)
+	if err != nil {
+		t.Errorf("Receive() error: %v", err)
+	}
+	if len(data) != 1 || data[0] != "v3" {
+		t.Errorf("Receive(2) = %v, expected [v3]", data)
 	}
 }
 
@@ -186,6 +311,58 @@ func TestErrUnknownID(t *testing.T) {
 	expect := "id 1 is unknown in the topic. Lowest id is 3"
 	if got := topicErr.Error(); got != expect {
 		t.Errorf("Got error message \"%s\", expected: \"%s\"", got, expect)
+	}
+}
+
+func TestReceiveWithFutureID(t *testing.T) {
+	top := topic.New[string]()
+	top.Publish("v1")
+
+	done := make(chan struct{})
+	go func() {
+		_, _, err := top.Receive(t.Context(), 100)
+		if err != nil {
+			t.Errorf("Receive() returned unexpected error: %v", err)
+		}
+		close(done)
+	}()
+
+	timer := time.NewTimer(time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-done:
+		t.Error("Receive() should block when ID > lastID")
+	case <-timer.C:
+		top.Publish("v2")
+	}
+
+	timer.Reset(100 * time.Millisecond)
+	select {
+	case <-done:
+	case <-timer.C:
+		t.Error("Receive() should unblock after Publish()")
+	}
+}
+
+func TestReceiveReturnsCorrectID(t *testing.T) {
+	top := topic.New[string]()
+	top.Publish("v1")
+	top.Publish("v2")
+
+	id, _, err := top.Receive(t.Context(), 0)
+	if err != nil {
+		t.Errorf("Receive() error: %v", err)
+	}
+	if id != 2 {
+		t.Errorf("Receive() returned id %d, expected 2", id)
+	}
+
+	id, _, err = top.Receive(t.Context(), 1)
+	if err != nil {
+		t.Errorf("Receive() error: %v", err)
+	}
+	if id != 2 {
+		t.Errorf("Receive() returned id %d, expected 2", id)
 	}
 }
 
@@ -226,8 +403,20 @@ func TestLastID(t *testing.T) {
 			if got != tt.expect {
 				t.Errorf("LastID() == %d, expected %d", got, tt.expect)
 			}
-
 		})
+	}
+}
+
+func TestLastIDAfterPrune(t *testing.T) {
+	top := topic.New[string]()
+	top.Publish("v1", "v2")
+	ti := time.Now()
+	top.Publish("v3")
+
+	top.Prune(ti)
+
+	if id := top.LastID(); id != 3 {
+		t.Errorf("LastID() after prune = %d, expected 3", id)
 	}
 }
 
@@ -339,6 +528,32 @@ func TestBlockOnHighestID(t *testing.T) {
 	}
 }
 
+func TestPruneDuringBlockedReceive(t *testing.T) {
+	top := topic.New[string]()
+	top.Publish("v1")
+
+	done := make(chan struct{})
+	go func() {
+		top.Receive(t.Context(), 1) // Blocking
+		close(done)
+	}()
+
+	time.Sleep(time.Millisecond)
+
+	// Prune while blocking
+	top.Prune(time.Now())
+
+	top.Publish("v2")
+
+	timer := time.NewTimer(100 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		t.Error("Receive() should unblock after Publish()")
+	}
+}
+
 func TestReceiveOnCanceledChannel(t *testing.T) {
 	top := topic.New[string]()
 	top.Publish("v1")
@@ -375,6 +590,64 @@ func TestReceiveOnCanceledChannel(t *testing.T) {
 		}
 	case <-timer.C:
 		t.Errorf("Receive() blocked. Expect it to return immediately after context is done.")
+	}
+}
+
+func TestConcurrentPublishes(t *testing.T) {
+	top := topic.New[int]()
+
+	const numPublishers = 10
+	const publishesPerPublisher = 100
+
+	var wg sync.WaitGroup
+	for i := range numPublishers {
+		wg.Go(func() {
+			for j := range publishesPerPublisher {
+				top.Publish(i*publishesPerPublisher + j)
+			}
+		})
+	}
+
+	wg.Wait()
+
+	_, data, err := top.Receive(t.Context(), 0)
+	if err != nil {
+		t.Errorf("Receive() error: %v", err)
+	}
+
+	expectedLen := numPublishers * publishesPerPublisher
+	if len(data) != expectedLen {
+		t.Errorf("Expected %d values, got %d", expectedLen, len(data))
+	}
+}
+
+func TestMultipleConcurrentReceives(t *testing.T) {
+	top := topic.New[string]()
+
+	const numReceivers = 100
+	var wg sync.WaitGroup
+
+	results := make([][]string, numReceivers)
+	for i := range numReceivers {
+		wg.Go(func() {
+			_, data, err := top.Receive(t.Context(), 0)
+			if err != nil {
+				t.Errorf("Receive() error: %v", err)
+				return
+			}
+			results[i] = data
+		})
+	}
+
+	time.Sleep(time.Millisecond)
+	top.Publish("value")
+
+	wg.Wait()
+
+	for i, result := range results {
+		if len(result) != 1 || result[0] != "value" {
+			t.Errorf("Receiver %d got %v, expected [value]", i, result)
+		}
 	}
 }
 
@@ -415,6 +688,19 @@ func TestTopicWithPointer(t *testing.T) {
 	expect := myType{5, "foobar"}
 	if len(values) != 2 || *values[0] != expect || *values[1] != expect {
 		t.Errorf("got %v, expected [%v %v]", values, expect, expect)
+	}
+}
+
+func TestTopicWithNilPointers(t *testing.T) {
+	top := topic.New[*string]()
+	top.Publish(nil, nil)
+
+	_, data, err := top.Receive(t.Context(), 0)
+	if err != nil {
+		t.Errorf("Receive() error: %v", err)
+	}
+	if len(data) != 2 || data[0] != nil || data[1] != nil {
+		t.Errorf("Expected [nil, nil], got %v", data)
 	}
 }
 
