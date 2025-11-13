@@ -64,19 +64,28 @@ func (t *Topic[T]) Publish(value ...T) uint64 {
 	return t.lastID()
 }
 
-// Receive returns all values from the topic. If id is 0, all values are
-// returned. Otherwise, all values that were inserted after the id are returned.
+// ReceiveAll returns all values from the topic, that is not pruned.
+//
+// For performance reasons, this function returns the internal slice of the
+// topic. It is not allowed to manipulate the values.
+func (t *Topic[T]) ReceiveAll() (uint64, []T) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.lastID(), t.data
+}
+
+// ReceiveSince returns all values from the topic after the given id.
 //
 // If the id is lower than the lowest id in the topic, an error of type
 // UnknownIDError is returned.
 //
 // If there is no new data, Receive() blocks until there is new data or the
-// given channel is done. The same happens with id 0, when there is no data at
-// all in the topic.
+// given channel is done.
 //
 // For performance reasons, this function returns the internal slice of the
 // topic. It is not allowed to manipulate the values.
-func (t *Topic[T]) Receive(ctx context.Context, id uint64) (uint64, []T, error) {
+func (t *Topic[T]) ReceiveSince(ctx context.Context, id uint64) (uint64, []T, error) {
 	t.mu.RLock()
 	lastIDWhenStarted := t.lastID()
 
@@ -88,17 +97,13 @@ func (t *Topic[T]) Receive(ctx context.Context, id uint64) (uint64, []T, error) 
 
 		select {
 		case <-c:
-			return t.Receive(ctx, lastIDWhenStarted)
+			return t.ReceiveSince(ctx, lastIDWhenStarted)
 		case <-ctx.Done():
 			return 0, nil, ctx.Err()
 		}
 	}
 
 	defer t.mu.RUnlock()
-
-	if id == 0 {
-		return t.lastID(), t.data, nil
-	}
 
 	if id < t.offset {
 		return 0, nil, UnknownIDError{ID: id, FirstID: t.offset + 1}

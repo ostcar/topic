@@ -18,7 +18,7 @@ func benchmarkPublishWithXReceivers(count int, b *testing.B) {
 			var id uint64
 			var values []string
 			for {
-				id, values, _ = top.Receive(ctx, id)
+				id, values, _ = top.ReceiveSince(ctx, id)
 				if len(values) == 0 {
 					return
 				}
@@ -47,7 +47,7 @@ func benchmarkRetrieveBigTopic(count int, b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		top.Receive(b.Context(), 0)
+		top.ReceiveSince(b.Context(), 0)
 	}
 }
 
@@ -69,7 +69,7 @@ func benchmarkRetrieveLastBigTopic(count int, b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		top.Receive(ctx, id-1)
+		top.ReceiveSince(ctx, id-1)
 	}
 }
 

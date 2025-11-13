@@ -5,7 +5,7 @@ of being pushed.
 It solves the problem, that you want to publish data to many goroutines. The
 standard way in go uses channels to push values to the readers. But channels
 have the problems, that either the goroutine sending the data has to wait for
-the reader or has to discard messages,if the reader is too slow. A buffered
+the reader or has to discard messages, if the reader is too slow. A buffered
 channel can help to delay the problem, but eventually the buffer could be full.
 
 The idea of pulling updates is inspired by Kafka or Redis-Streams. A subscriber
@@ -44,30 +44,30 @@ ignored.
 
 # Receive messages
 
-Messages can be received with the Receive()-method:
+Messages can be received with the ReceiveAll()- or ReceiveSince()-method:
 
-	id, values, err := top.Receive(context.Background(), 0)
+	id, values := topic.ReceiveAll()
+	id, values, err := top.ReceiveSince(context.Background(), 42)
 
-The first returned value is the id created by the last Publish()-call. The
-second value is a slice of all messages that were published before.
+The returned id is the number of values in the topic. It can only increase.
 
-To receive newer values, Receive() can be called again with the id from the last
+The returned values are a slice of the published messages.
+
+To receive newer values, ReceiveSince() can be called again with the id from the last
 call:
 
-	id, values, err := top.Receive(context.Background(), 0)
+	id, values, err := top.ReceiveAll()
 	...
-	id, values, err = top.Receive(context.Background(), id)
+	id, values, err = top.ReceiveSince(context.Background(), id)
 
-If the given id is zero, then all messages are returned. If the id is greater
-than zero, then only messages are returned that were published by the topic
-after the id was created.
+Only messages, that were published after the given id are returned.
 
-When there are no new values in the topic, then the Receive()-call blocks until
+When there are no new values in the topic, then the ReceiveSince()-call blocks until
 there are new values. To add a timeout to the call, the context can be used:
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	id, values, err = top.Receive(ctx, id)
+	id, values, err = top.ReceiveSince(ctx, id)
 
 If there are no new values before the context is canceled, the topic returns the error
 of the context. For example `context.DeadlineExceeded` or `context.Canceled`.
@@ -81,7 +81,7 @@ The usual pattern to subscribe to a topic is:
 	var values []string
 	var err error
 	for {
-	    id, values, err = top.Receive(ctx, id)
+	    id, values, err = top.ReceiveSince(ctx, id)
 	    if err != nil {
 	        if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 	            // Timeout
@@ -92,7 +92,7 @@ The usual pattern to subscribe to a topic is:
 	    // Process values
 	}
 
-The loop will process all values published by the topic for one minute.
+The loop will process all values published to the topic for one minute.
 
 # Get Last ID
 
@@ -101,10 +101,11 @@ should be processed that were published after the loop starts, the method
 LastID() can be used:
 
 	id := top.LastID()
-	id, values, err = top.Receive(context.Background(), id)
+	id, values, err = top.ReceiveSince(context.Background(), id)
 
-The return value of LastID() is the highest id in the topic. So a Receive() call
-on top.LastID() will only return data that was published after the call.
+The return value of LastID() is the highest id in the topic. So
+a ReceiveSince() call on top.LastID() will only return data that
+was published after the call.
 
 A pattern to receive only new data is:
 
@@ -112,7 +113,7 @@ A pattern to receive only new data is:
 	var values []string
 	var err error
 	for {
-	    id, values, err = top.Receive(context.Background(), id)
+	    id, values, err = top.ReceiveSince(context.Background(), id)
 	    if err != nil {
 	        // Handle error
 	    }
