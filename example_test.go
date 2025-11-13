@@ -24,7 +24,7 @@ func ExampleTopic() {
 	var values []string
 	var err error
 	for {
-		id, values, err = top.Receive(ctx, id)
+		id, values, err = top.ReceiveSince(ctx, id)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				// shutdown was called.
