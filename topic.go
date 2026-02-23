@@ -99,7 +99,7 @@ func (t *Topic[T]) ReceiveSince(ctx context.Context, id uint64) (uint64, []T, er
 		case <-c:
 			return t.ReceiveSince(ctx, lastIDWhenStarted)
 		case <-ctx.Done():
-			return 0, nil, ctx.Err()
+			return 0, nil, context.Cause(ctx)
 		}
 	}
 
