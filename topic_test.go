@@ -694,6 +694,21 @@ func TestTopicWithNilPointers(t *testing.T) {
 	}
 }
 
+func TestReceiveSinceUsesContextCause(t *testing.T) {
+	testErr := errors.New("test error")
+	ctx, cancelCause := context.WithCancelCause(t.Context())
+	cancelCause(testErr)
+
+	_, _, err := topic.New[*string]().ReceiveSince(ctx, 100)
+	if err == nil {
+		t.Errorf("expected error")
+	}
+
+	if !errors.Is(err, testErr) {
+		t.Errorf("expected testErr, got %v", err)
+	}
+}
+
 func cmpSlice(one, two []string) bool {
 	if len(one) != len(two) {
 		return false
